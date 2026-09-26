@@ -155,12 +155,53 @@ def test_get_ocr_ground_truth_out_of_bounds_handling():
     adapter = SROIEAdapter(FIXTURE_ROOT)
     ocr_gt = adapter.get_ocr_ground_truth("doc_oob")
     # Coordinates in file: -10, 10, 150, 10, 150, 40, -10, 40
-    # Clamped bbox x_min should be 0.0
+    # Must preserve exact raw unclipped coordinates: source coordinates == adapter coordinates
     token = ocr_gt.tokens[0]
-    assert token.bbox.x_min == 0.0
+    assert token.bbox.x_min == -10.0
     assert token.bbox.x_max == 150.0
+    assert token.bbox.y_min == 10.0
+    assert token.bbox.y_max == 40.0
     # Raw polygon preserved verbatim
-    assert ocr_gt.metadata["polygons"][0][0] == -10.0
+    assert ocr_gt.metadata["polygons"][0] == [-10.0, 10.0, 150.0, 10.0, 150.0, 40.0, -10.0, 40.0]
+
+
+def test_get_ocr_ground_truth_fewer_than_eight_coords_rejected(tmp_path: Path):
+    root = tmp_path / "dataset"
+    (root / "train" / "box").mkdir(parents=True)
+    # 7 coordinates + text
+    (root / "train" / "box" / "few_coords.txt").write_text(
+        "10,20,30,40,50,60,70,TEXT\n", encoding="utf-8"
+    )
+    adapter = SROIEAdapter(root)
+    with pytest.raises(ValueError, match="expected exactly 8 coordinates"):
+        adapter.get_ocr_ground_truth("few_coords")
+
+
+def test_get_ocr_ground_truth_more_than_eight_coords_rejected(tmp_path: Path):
+    root = tmp_path / "dataset"
+    (root / "train" / "box").mkdir(parents=True)
+    # 10 coordinates + text
+    (root / "train" / "box" / "many_coords.txt").write_text(
+        "10,20,30,40,50,60,70,80,90,100,TEXT\n", encoding="utf-8"
+    )
+    adapter = SROIEAdapter(root)
+    with pytest.raises(ValueError, match="line contains more than 8 coordinates"):
+        adapter.get_ocr_ground_truth("many_coords")
+
+
+def test_get_ocr_ground_truth_exactly_eight_coords_accepted(tmp_path: Path):
+    root = tmp_path / "dataset"
+    (root / "train" / "box").mkdir(parents=True)
+    # Exactly 8 coordinates + text (and text containing commas)
+    (root / "train" / "box" / "exact_coords.txt").write_text(
+        "10,20,30,20,30,40,10,40,CITY, COUNTRY, 12345\n", encoding="utf-8"
+    )
+    adapter = SROIEAdapter(root)
+    gt = adapter.get_ocr_ground_truth("exact_coords")
+    assert len(gt.tokens) == 1
+    assert gt.tokens[0].text == "CITY, COUNTRY, 12345"
+    assert gt.tokens[0].bbox.x_min == 10.0
+    assert gt.tokens[0].bbox.x_max == 30.0
 
 
 def test_get_ocr_ground_truth_missing_file():
@@ -179,11 +220,6 @@ def test_get_ocr_ground_truth_empty_file(tmp_path: Path):
         adapter.get_ocr_ground_truth("empty_doc")
 
 
-def test_get_ocr_ground_truth_malformed_lines():
-    adapter = SROIEAdapter(FIXTURE_ROOT)
-    # doc_bad_ocr has fewer than 8 coordinates
-    with pytest.raises(ValueError, match="Malformed OCR annotation"):
-        adapter.get_ocr_ground_truth("doc_bad_ocr")
 
 
 def test_get_ocr_ground_truth_non_numeric_coords(tmp_path: Path):

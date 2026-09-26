@@ -1,9 +1,12 @@
 {
   "dataset": "sroie-datasetv2",
+  "mode": "synthetic_fixture",
+  "source": "tests/fixtures/sroie",
   "train_count": 5,
   "test_count": 2,
   "expected_train_count": 626,
   "expected_test_count": 347,
+  "strict_mode": false,
   "summary": {
     "train_images": 6,
     "train_ocr": 5,
@@ -90,7 +93,7 @@
   },
   "errors": [
     "[C-10] Split 'train' missing OCR annotations for IDs: ['doc_missing_pair']",
-    "[C-05] Document 'doc_bad_ocr' line 1: expected 8 coords + text, got 4 parts: '10,20,30,MALFORMED_LINE_TOO_FEW_COORDS'",
+    "[C-05] Document 'doc_bad_ocr' line 1: expected exactly 8 coordinates and text, got fewer than 8 coordinates (4 parts): '10,20,30,MALFORMED_LINE_TOO_FEW_COORDS'",
     "[C-08] Document 'doc_bad_kie' KIE missing keys: ['address', 'total']"
   ],
   "warnings": [

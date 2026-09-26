@@ -33,12 +33,11 @@ class BoundingBox:
         x_max = _validate_numeric("x_max", self.x_max)
         y_max = _validate_numeric("y_max", self.y_max)
 
-        if x_min < 0 or y_min < 0:
-            raise ValueError(f"Coordinates cannot be negative: ({x_min}, {y_min})")
         if x_max < x_min:
             raise ValueError(f"x_max ({x_max}) must be >= x_min ({x_min})")
         if y_max < y_min:
             raise ValueError(f"y_max ({y_max}) must be >= y_min ({y_min})")
+
 
     @property
     def width(self) -> float:

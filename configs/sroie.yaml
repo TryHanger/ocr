@@ -10,7 +10,6 @@ dataset:
     - "date"
     - "address"
     - "total"
-  min_dimension_pixels: 100
   supported_image_extensions:
     - ".jpg"
     - ".jpeg"

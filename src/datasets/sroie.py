@@ -276,18 +276,18 @@ class SROIEAdapter(BaseDatasetAdapter):
             if not line_str.strip():
                 continue
 
-            parts = line_str.split(",", 8)
-            if len(parts) < 9:
+            all_parts = line_str.split(",")
+            if len(all_parts) < 9:
                 raise ValueError(
                     f"Malformed OCR annotation at line {line_num} in document '{document_id}': "
-                    f"expected 8 coordinates and text, got {len(parts)} parts in line: '{line_str}'"
+                    f"expected exactly 8 coordinates and text, got {len(all_parts)} parts in line: '{line_str}'"
                 )
 
             try:
-                coords = [float(x.strip()) for x in parts[:8]]
+                coords = [float(x.strip()) for x in all_parts[:8]]
             except ValueError as e:
                 raise ValueError(
-                    f"Non-numeric OCR coordinate at line {line_num} in document '{document_id}': {parts[:8]}"
+                    f"Non-numeric OCR coordinate at line {line_num} in document '{document_id}': {all_parts[:8]}"
                 ) from e
 
             if not all(math.isfinite(c) for c in coords):
@@ -295,16 +295,33 @@ class SROIEAdapter(BaseDatasetAdapter):
                     f"Non-finite OCR coordinate at line {line_num} in document '{document_id}': {coords}"
                 )
 
-            # Raw transcript preserved verbatim (no lowercasing, no punctuation stripping)
-            raw_transcript = parts[8]
+            # Reject lines with > 8 coordinates:
+            # If line has more than 9 comma-separated parts and the 9th item is numeric,
+            # it indicates a 9th coordinate before the transcription.
+            if len(all_parts) > 9:
+                try:
+                    float(all_parts[8].strip())
+                    is_ninth_coord = True
+                except ValueError:
+                    is_ninth_coord = False
+
+                if is_ninth_coord:
+                    raise ValueError(
+                        f"Malformed OCR annotation at line {line_num} in document '{document_id}': "
+                        f"line contains more than 8 coordinates (found 9th numeric coordinate '{all_parts[8].strip()}')"
+                    )
+
+            # Raw transcript preserved verbatim (joining any remaining comma-split segments)
+            raw_transcript = ",".join(all_parts[8:])
 
             xs = [coords[0], coords[2], coords[4], coords[6]]
             ys = [coords[1], coords[3], coords[5], coords[7]]
-            x_min = max(0.0, float(min(xs)))
-            y_min = max(0.0, float(min(ys)))
-            x_max = max(x_min, float(max(xs)))
-            y_max = max(y_min, float(max(ys)))
+            x_min = float(min(xs))
+            y_min = float(min(ys))
+            x_max = float(max(xs))
+            y_max = float(max(ys))
 
+            # Raw unclipped BoundingBox derived directly from polygon
             bbox = BoundingBox(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
             tokens.append(OCRToken(text=raw_transcript, bbox=bbox, confidence=None))
             polygons.append(coords)

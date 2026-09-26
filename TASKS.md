@@ -6,10 +6,15 @@
 
 ## Completed
 
+- **TASK-004-R1 — Correct SROIE Adapter Raw-GT Semantics**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).
+  - *Результат:* Исправлена семантика Raw Ground Truth: удален clipping координат в `SROIEAdapter.get_ocr_ground_truth` и ограничение в `BoundingBox`; координаты разметки сохраняются 1-в-1 с источником, включая отрицательные и выходящие за пределы кадра. Восстановлена строгая валидация формата OCR: ровно 8 координат, парсинг гарантирует отказ при < 8 и > 8 координатах без поглощения чисел в текст. Удален несанкционированный порог площади $H \times W \ge 10000$ (C-03 теперь требует исключительно $H > 0$ и $W > 0$). Отчет аудита дополнен метаданными `"mode": "synthetic_fixture"` и `"source": "tests/fixtures/sroie"`, а также поддержкой строгого режима сплитов `--strict` / `--strict-counts`. Все 208 тестов пройдены со 100% покрытием `src/core` и `src/datasets` (97% суммарно).
+
 - **TASK-004 — SROIE Dataset Adapter + Dataset Integrity Audit**
   - *Дата завершения:* 2026-09-26
-  - *Статус:* Завершена успешно.
-  - *Результат:* Создан пакет `src/datasets/`, реализованы `BaseDatasetAdapter` и `SROIEAdapter` (`src/datasets/sroie.py`) с полной поддержкой канонической структуры Kaggle SROIE v2 (`train/` и `test/` с подкаталогами `img/`, `box/`, `entities/`). Реализован строгий принцип Raw Ground Truth Immutability (нет lowercasing, date parsing, float conversion, удаления пунктуации). Создан CLI-скрипт `scripts/audit_sroie.py` для валидации чек-листа C-01 – C-10 из `docs/dataset_integrity.md`, формирующий машиночитаемый JSON-отчет (`experiments/audit/sroie_integrity.json`) и консольную сводку с корректным exit code. Созданы синтетические фикстуры `tests/fixtures/sroie/` (валидные, с дефектами OCR/KIE, непарными файлами, out-of-bounds координатами) и чистые фикстуры `tests/fixtures/sroie_valid/`. Добавлены unit-тесты адаптера и аудита, все 206 тестов проекта пройдены со 100% покрытием `src/core` и `src/datasets` (97% суммарно).
+  - *Статус:* Доработана в рамках TASK-004-R1 (READY FOR ARCHITECT REVIEW).
+  - *Результат:* Создан пакет `src/datasets/`, реализованы `BaseDatasetAdapter` и `SROIEAdapter` (`src/datasets/sroie.py`) с полной поддержкой канонической структуры Kaggle SROIE v2 (`train/` и `test/` с подкаталогами `img/`, `box/`, `entities/`). Реализован строгий принцип Raw Ground Truth Immutability (нет lowercasing, date parsing, float conversion, удаления пунктуации). Создан CLI-скрипт `scripts/audit_sroie.py` для валидации чек-листа C-01 – C-10 из `docs/dataset_integrity.md`, формирующий машиночитаемый JSON-отчет (`experiments/audit/sroie_integrity.json`) и консольную сводку с корректным exit code. Созданы синтетические фикстуры `tests/fixtures/sroie/` (валидные, с дефектами OCR/KIE, непарными файлами, out-of-bounds координатами) и чистые фикстуры `tests/fixtures/sroie_valid/`. Добавлены unit-тесты адаптера и аудита.
 
 
 - **TASK-003-R2 — Research Freeze**

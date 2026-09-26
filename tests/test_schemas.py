@@ -45,14 +45,24 @@ def test_bounding_box_zero_area():
 
 
 @pytest.mark.parametrize("x_min,y_min,x_max,y_max", [
-    (-1, 0, 10, 10),
-    (0, -1, 10, 10),
     (15, 0, 10, 10),   # x_max < x_min
     (0, 25, 10, 20),   # y_max < y_min
 ])
 def test_bounding_box_invalid_coords(x_min, y_min, x_max, y_max):
     with pytest.raises(ValueError):
         BoundingBox(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
+
+
+def test_bounding_box_allows_negative_and_out_of_bounds_coords():
+    # Out of bounds geometry (e.g. text extending beyond image bounds)
+    bbox = BoundingBox(x_min=-10.5, y_min=-5.0, x_max=150.0, y_max=200.0)
+    assert bbox.x_min == -10.5
+    assert bbox.y_min == -5.0
+    assert bbox.x_max == 150.0
+    assert bbox.y_max == 200.0
+    assert bbox.width == 160.5
+    assert bbox.height == 205.0
+
 
 
 @pytest.mark.parametrize("val", ["10", True, False, None, float("nan"), float("inf")])

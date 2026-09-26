@@ -44,7 +44,7 @@ def audit_sroie_dataset(
     expected_train_count: int = 626,
     expected_test_count: int = 347,
     strict_counts: bool = False,
-    min_area_pixels: int = 10000,
+    mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute integrity audit C-01 to C-10 on an SROIE dataset.
 
@@ -53,7 +53,7 @@ def audit_sroie_dataset(
         expected_train_count: Canonical train document count.
         expected_test_count: Canonical test document count.
         strict_counts: Whether count mismatch is treated as an error.
-        min_area_pixels: Minimum image area (H * W) requirement.
+        mode: Audit mode string ('canonical', 'synthetic_fixture', 'subset').
 
     Returns:
         Structured audit report dictionary.
@@ -65,6 +65,8 @@ def audit_sroie_dataset(
     # Support nested SROIE2019/ subdirectory if present
     if (root / "SROIE2019" / "train").exists() or (root / "SROIE2019" / "test").exists():
         root = root / "SROIE2019"
+
+    resolved_mode = mode or ("canonical_strict" if strict_counts else "synthetic_fixture")
 
     errors: List[str] = []
     warnings: List[str] = []
@@ -202,13 +204,13 @@ def audit_sroie_dataset(
                 c02_passed = False
                 errors.append(f"[C-02] Image is not 3-channel RGB/BGR (shape {img.shape}): '{img_path}'")
 
-            # C-03: Geometric dimensions
+            # C-03: Geometric dimensions (strictly H > 0, W > 0; no arbitrary area threshold)
             h, w = img.shape[:2]
             image_shapes[doc_id] = (h, w)
-            if h <= 0 or w <= 0 or (h * w) < min_area_pixels:
+            if h <= 0 or w <= 0:
                 c03_passed = False
                 errors.append(
-                    f"[C-03] Image dimensions {w}x{h} (area {w * h}) below minimum threshold ({min_area_pixels}): '{img_path}'"
+                    f"[C-03] Invalid non-positive image dimensions {w}x{h}: '{img_path}'"
                 )
 
     # C-04, C-05, C-06: OCR checks
@@ -237,7 +239,7 @@ def audit_sroie_dataset(
                 errors.append(f"[C-04] OCR annotation file content is blank: '{box_path}'")
                 continue
 
-            # C-05: Polygon correctness
+            # C-05: Polygon correctness (strictly 8 numeric coordinates + transcription)
             lines = content.splitlines()
             h_img, w_img = image_shapes.get(doc_id, (None, None))
 
@@ -246,20 +248,21 @@ def audit_sroie_dataset(
                 if not raw_line.strip():
                     continue
 
-                parts = raw_line.split(",", 8)
-                if len(parts) < 9:
+                all_parts = raw_line.split(",")
+                if len(all_parts) < 9:
                     c05_passed = False
                     errors.append(
-                        f"[C-05] Document '{doc_id}' line {line_idx}: expected 8 coords + text, got {len(parts)} parts: '{raw_line}'"
+                        f"[C-05] Document '{doc_id}' line {line_idx}: expected exactly 8 coordinates and text, "
+                        f"got fewer than 8 coordinates ({len(all_parts)} parts): '{raw_line}'"
                     )
                     continue
 
                 try:
-                    coords = [float(x.strip()) for x in parts[:8]]
+                    coords = [float(x.strip()) for x in all_parts[:8]]
                 except ValueError:
                     c05_passed = False
                     errors.append(
-                        f"[C-05] Document '{doc_id}' line {line_idx}: non-numeric coordinates: {parts[:8]}"
+                        f"[C-05] Document '{doc_id}' line {line_idx}: non-numeric coordinates: {all_parts[:8]}"
                     )
                     continue
 
@@ -269,6 +272,23 @@ def audit_sroie_dataset(
                         f"[C-05] Document '{doc_id}' line {line_idx}: non-finite coordinates: {coords}"
                     )
                     continue
+
+                # Reject lines with > 8 coordinates:
+                if len(all_parts) > 9:
+                    try:
+                        float(all_parts[8].strip())
+                        is_ninth_coord = True
+                    except ValueError:
+                        is_ninth_coord = False
+
+                    if is_ninth_coord:
+                        c05_passed = False
+                        errors.append(
+                            f"[C-05] Document '{doc_id}' line {line_idx}: line contains more than 8 coordinates "
+                            f"(found 9th numeric coordinate '{all_parts[8].strip()}'): '{raw_line}'"
+                        )
+                        continue
+
 
                 # C-06: Bounding box geometry
                 xs = [coords[0], coords[2], coords[4], coords[6]]
@@ -407,10 +427,13 @@ def audit_sroie_dataset(
 
     report = {
         "dataset": "sroie-datasetv2",
+        "mode": resolved_mode,
+        "source": str(root).replace("\\", "/"),
         "train_count": paired_train_count,
         "test_count": paired_test_count,
         "expected_train_count": expected_train_count,
         "expected_test_count": expected_test_count,
+        "strict_mode": strict_counts,
         "summary": {
             "train_images": len(split_ids.get("train", {}).get("img", set())),
             "train_ocr": len(split_ids.get("train", {}).get("box", set())),
@@ -454,9 +477,18 @@ def main() -> int:
         help="Path to output JSON audit report.",
     )
     parser.add_argument(
+        "--strict",
         "--strict-counts",
+        dest="strict_counts",
         action="store_true",
-        help="Fail audit if document counts do not exactly match 626 train / 347 test.",
+        help="Enforce strict canonical document counts (train=626, test=347).",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default=None,
+        choices=["canonical", "canonical_strict", "synthetic_fixture", "subset"],
+        help="Audit mode identifier for report metadata.",
     )
 
     args = parser.parse_args()
@@ -474,13 +506,13 @@ def main() -> int:
 
     expected_train = dataset_cfg.get("expected_train_count", 626)
     expected_test = dataset_cfg.get("expected_test_count", 347)
-    min_area = dataset_cfg.get("min_dimension_pixels", 100) ** 2
 
     print("=" * 60)
     print("SROIE DATASET INTEGRITY AUDIT")
     print("=" * 60)
-    print(f"Target Root: {root_dir}")
-    print(f"Strict Counts: {args.strict_counts}")
+    print(f"Target Root:   {root_dir}")
+    print(f"Strict Mode:   {args.strict_counts}")
+    print(f"Mode Override: {args.mode}")
     print("-" * 60)
 
     try:
@@ -489,7 +521,7 @@ def main() -> int:
             expected_train_count=expected_train,
             expected_test_count=expected_test,
             strict_counts=args.strict_counts,
-            min_area_pixels=min_area,
+            mode=args.mode,
         )
     except Exception as e:
         print(f"FATAL AUDIT ERROR: {e}", file=sys.stderr)

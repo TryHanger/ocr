@@ -36,12 +36,12 @@
   - `scripts/audit_sroie.py`: CLI-скрипт сквозного аудита целостности датасета SROIE по чек-листу C-01 – C-10.
 - `src/` — корень исходного кода:
   - `src/core/` — **реализован**:
-    - `src/core/schemas.py`: DTO и схемы данных (`BoundingBox`, `OCRToken`, `OCRResult`, `KIEResult`, `DocumentMetadata`, `DegradationSpec`, `PreprocessingSpec`, `ExperimentResult`, `OCRGroundTruth`, `KIEGroundTruth`) со строгой валидацией инвариантов и bidirectional JSON/dict сериализацией.
+    - `src/core/schemas.py`: DTO и схемы данных (`BoundingBox`, `OCRToken`, `OCRResult`, `KIEResult`, `DocumentMetadata`, `DegradationSpec`, `PreprocessingSpec`, `ExperimentResult`, `OCRGroundTruth`, `KIEGroundTruth`) со строгой валидацией инвариантов и bidirectional JSON/dict сериализацией. `BoundingBox` разрешает координаты вне границ изображения и отрицательные координаты, сохраняя геометрию первоисточника без искажений.
     - `src/core/seed.py`: глобальная фиксация random seed (Python random, NumPy, hash seed).
     - `src/core/contracts.py`: абстрактные базовые классы/контракты будущих модулей (`BaseDatasetAdapter`, `BaseDegradation`, `BasePreprocessor`, `BaseOCREngine`, `BaseKIEEngine`, `BaseEvaluator`).
   - `src/datasets/` — **реализован**:
     - `src/datasets/base.py`: реэкспорт абстрактного контракта `BaseDatasetAdapter`.
-    - `src/datasets/sroie.py`: реализация `SROIEAdapter` для канонической структуры Kaggle SROIE v2 (`train/` и `test/` с поддиректориями `img/`, `box/`, `entities/`). Строго соблюдает **Raw Ground Truth Immutability** (без lowercasing, date parsing, float conversion, удаления пунктуации). Детерминированная сортировка, canonical RGB uint8 изображения.
+    - `src/datasets/sroie.py`: реализация `SROIEAdapter` для канонической структуры Kaggle SROIE v2 (`train/` и `test/` с поддиректориями `img/`, `box/`, `entities/`). Строго соблюдает **Raw Ground Truth Immutability**: координаты не обрезаются и не нормализуются (`source == adapter`), полигоны и derived `BoundingBox` сохраняются verbatim, валидация формата OCR требует ровно 8 координат, текст транскрипции не модифицируется (без lowercasing, date parsing, float conversion, удаления пунктуации). Детерминированная сортировка, canonical RGB uint8 изображения.
   - `src/degradation/` (реализация алгоритмов отсутствует).
   - `src/preprocessing/` (реализация алгоритмов отсутствует).
   - `src/ocr/` (реализация алгоритмов отсутствует).
@@ -49,14 +49,14 @@
   - `src/evaluation/` (реализация алгоритмов отсутствует).
   - `src/visualization/` (реализация отсутствует).
 - `tests/` — тестовый набор:
-  - `tests/fixtures/sroie/` — синтетические фикстуры датасета (валидные, с искажениями OCR, KIE, отсутствующими парами, координатами вне границ кадра).
+  - `tests/fixtures/sroie/` — синтетические фикстуры датасета (валидные, с дефектами OCR, KIE, отсутствующими парами, координатами вне границ кадра).
   - `tests/fixtures/sroie_valid/` — чистые валидные фикстуры для тестирования успешного прохождения аудита.
   - `tests/test_environment.py` — смоук-тест базового окружения.
   - `tests/test_schemas.py` — детальные unit-тесты схем данных, инвариантов, сериализации.
   - `tests/test_seed.py` — unit-тесты детерминизма генераторов случайных чисел.
   - `tests/test_contracts.py` — unit-тесты соблюдения абстрактных контрактов модулей (включая `BaseDatasetAdapter`).
-  - `tests/test_dataset_sroie.py` — unit-тесты адаптера `SROIEAdapter` (детерминированность, неизменяемость GT, обработка ошибок, загрузка RGB).
-  - `tests/test_audit_sroie.py` — unit-тесты проверок C-01 – C-10 скрипта аудита целостности датасета.
+  - `tests/test_dataset_sroie.py` — unit-тесты адаптера `SROIEAdapter` (детерминированность, неизменяемость GT, обработка ошибок, загрузка RGB, сохранение необрезанных координат, строгая проверка 8 координат).
+  - `tests/test_audit_sroie.py` — unit-тесты проверок C-01 – C-10 скрипта аудита целостности датасета (включая strict/subset режимы и проверку метаданных отчета).
 
 ---
 
@@ -75,8 +75,8 @@
 
 ## 4. Состояние ML/OCR/KIE модулей
 - **Research Protocol & Dataset Strategy:** Полностью зафиксированы и заморожены (**FROZEN**, ADR-008 – ADR-012).
-- **Dataset Adapter:** Реализован (`BaseDatasetAdapter`, `SROIEAdapter`).
-- **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10).
+- **Dataset Adapter:** Реализован (`BaseDatasetAdapter`, `SROIEAdapter`) в полном соответствии с raw-GT семантикой TASK-004-R1 (сохранение геометрии без клиппинга, строгая проверка 8 координат, неизменяемость транскрипций).
+- **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10, поддержка аргументов `--mode` и `--strict`, очистка C-03 от порогов площади, явная фиксация режима фикстур в отчете).
 - **Degradation Engine:** Не реализован (контракт описан через `BaseDegradation` и `DegradationSpec`).
 - **Preprocessing Pipeline:** Не реализован (контракт описан через `BasePreprocessor` и `PreprocessingSpec`).
 - **OCR Engine Abstraction & Models:** Не реализованы (контракт описан через `BaseOCREngine`, `OCRToken`, `OCRResult`).
@@ -92,9 +92,9 @@
   ```bash
   pytest --cov=src/core --cov=src/datasets --cov=scripts.audit_sroie --cov-report=term-missing
   ```
-- Результат: **206 тестов пройдено успешно**, покрытие:
-  - `src/core`: **100%** (374 statements, 0 missed)
-  - `src/datasets`: **100%** (155 statements, 0 missed)
-  - `scripts/audit_sroie.py`: **92%** (290 statements, 22 missed)
-  - Суммарное покрытие: **97%** (819 statements, 22 missed).
+- Результат: **208 тестов пройдено успешно**, покрытие:
+  - `src/core`: **100%** (368 statements, 0 missed)
+  - `src/datasets`: **100%** (163 statements, 0 missed)
+  - `scripts/audit_sroie.py`: **93%** (302 statements, 22 missed)
+  - Суммарное покрытие: **97%** (837 statements, 22 missed).
 
