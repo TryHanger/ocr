@@ -1,0 +1,34 @@
+# OCR Engine and Evaluation Baseline Configuration
+version: "1.0.0"
+
+engine:
+  name: "rapidocr"
+  package_version: "1.4.4"
+  models:
+    detection: "ch_PP-OCRv4_det_infer.onnx"
+    recognition: "ch_PP-OCRv4_rec_infer.onnx"
+    classifier: "ch_ppocr_mobile_v2.0_cls_infer.onnx"
+  runtime:
+    backend: "onnxruntime"
+    device: "cpu"
+    threads: 4
+  parameters:
+    text_score: 0.5
+    min_confidence: 0.0
+
+reading_order:
+  strategy: "vertical_line_grouping_then_horizontal"
+  line_tolerance_factor: 0.5
+  note: "Engineering heuristic based on median token height. Configurable, not claimed universally optimal."
+
+evaluation:
+  primary_metrics:
+    - "cer"
+    - "wer"
+  secondary_metrics:
+    - "character_ned_similarity"
+  normalization:
+    unicode_form: "NFC"
+    collapse_whitespace: true
+    remove_control_characters: true
+    strip: true

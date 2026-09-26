@@ -6,6 +6,11 @@
 
 ## Completed
 
+- **TASK-006 — OCR Engine Baseline + End-to-End OCR Evaluation**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).
+  - *Результат:* Реализован базовый локальный OCR-движок на базе RapidOCR (`rapidocr-onnxruntime==1.4.4`, `onnxruntime==1.30.0`, PP-OCRv4 ONNX модели) и абстракции `BaseOCREnginePrimitive` со строгой изоляцией от Ground Truth в основном контракте `recognize(image, document_id) -> OCRResult`. Реализована детерминированная эвристика порядка чтения строк (`sort_tokens_reading_order` с настраиваемым допуском `line_tolerance_factor=0.5`). Реализован отдельный диагностический метод `diagnostic_gt_region_recognition` для анализа детекции/распознавания. Создан пакет `src/evaluation/ocr_metrics.py` с реализацией расстояния Левенштейна, CER, WER и строго определенного **Character-NED similarity** ($1.0 - \frac{\text{edit\_distance}}{\max(\text{len}(pred), \text{len}(gt), 1)}$). Реализована симметричная нормализация текста OCR (Unicode NFC, схлопывание пробелов, удаление управляющих символов), сохраняющая 4 текстовых представления (`raw_pred`, `raw_gt`, `norm_pred`, `norm_gt`). Создана конфигурация `configs/ocr.yaml` и CLI runner `scripts/run_ocr_baseline.py`. В отсутствие скачанного датасета сформирован отчет `experiments/runs/ocr_baseline_report.json` со статусом `real_data_ocr_baseline: "PENDING"`. Принят `ADR-013`. Добавлены исчерпывающие unit-тесты (`tests/test_ocr.py`, `tests/test_ocr_metrics.py`). Все 306 тестов проекта пройдены с общим покрытием 96% (100% evaluation, 100% core, 100% datasets, 98% degradation, 91% ocr).
+
 - **TASK-005 — Degradation Engine + Severity Calibration**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно (реализационная часть модуля деградаций и калибровочного пайплайна).
