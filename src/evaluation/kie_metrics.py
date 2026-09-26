@@ -48,15 +48,17 @@ def normalize_kie_text(text: str) -> str:
 
 
 def normalize_total_amount(val: Any) -> str:
-    """Normalize total amount field preserving numeric decimal values.
+    """Normalize total amount field for evaluator-side comparison.
 
-    Handles prefixes (RM, MYR, $), whitespace, and ensures standardized decimal format.
-    Example:
-        '$10.00' -> '10.00'
-        'RM10.00' -> '10.00'
-        'MYR 10.00' -> '10.00'
-        '10.0' -> '10.00'
-        '10' -> '10.00'
+    CRITICAL PROTOCOL NOTE:
+    This numeric canonicalization is STRICTLY evaluator-side as part of the
+    normalized evaluation protocol. It MUST NOT be applied during OCR or KIE inference.
+    In raw evaluation, strict string equality (prediction == GT) applies without this formatting.
+
+    Rules applied:
+    1. Currency stripping: removes currency prefixes (RM, MYR, $) and suffixes.
+    2. Whitespace normalization: strips leading/trailing whitespaces.
+    3. Conservative numeric formatting: canonicalizes decimal representation (e.g. 10 -> 10.00, 10.5 -> 10.50).
     """
     if val is None:
         return ""
