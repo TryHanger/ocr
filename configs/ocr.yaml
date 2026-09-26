@@ -3,18 +3,29 @@ version: "1.0.0"
 
 engine:
   name: "rapidocr"
-  package_version: "1.4.4"
+  package_version: "3.9.2"
   models:
-    detection: "ch_PP-OCRv4_det_infer.onnx"
-    recognition: "ch_PP-OCRv4_rec_infer.onnx"
-    classifier: "ch_ppocr_mobile_v2.0_cls_infer.onnx"
+    detection: "PP-OCRv6_det_small.onnx"
+    recognition: "PP-OCRv6_rec_small.onnx"
+    classifier: "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
   runtime:
     backend: "onnxruntime"
     device: "cpu"
+    provider: "CPUExecutionProvider"
     threads: 4
   parameters:
     text_score: 0.5
     min_confidence: 0.0
+    use_cls: true
+
+resize_policy:
+  max_side_len: 2000
+  min_side_len: 30
+  det_limit_side_len: 736
+  det_limit_type: "min"
+  interpolation: "cv2.INTER_LINEAR"
+  identical_across_baselines: true
+  note: "Native RapidOCR bilinear resize policy. Same image geometry and resolution pipeline applied across B0, B1, and B2."
 
 reading_order:
   strategy: "vertical_line_grouping_then_horizontal"

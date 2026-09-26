@@ -6,6 +6,11 @@
 
 ## Completed
 
+- **TASK-008 — OCR Stack Refresh & Reproducibility Lock**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).
+  - *Результат:* Базовый OCR-стек успешно обновлен с устаревшей версии PP-OCRv4 на современный стек RapidOCR (`rapidocr==3.9.2`) + ONNX Runtime (`onnxruntime==1.30.0`) с моделями PP-OCRv6 (small tier) для детекции (`PP-OCRv6_det_small.onnx`) и распознавания (`PP-OCRv6_rec_small.onnx`), а также мобильным классификатором ориентации (`ch_ppocr_mobile_v2.0_cls_mobile.onnx`). Реализован механизм криптографической фиксации воспроизводимости (Reproducibility Lock) с динамической интроспекцией сессий ONNX Runtime и проверкой SHA256 хешей файлов весов (`verify_model_stack()`). Реализован экспорт структурированного манифеста `experiments/runs/ocr_stack_manifest.json` с четким разделением на секции `configured`, `resolved` и `environment`. Проведен строгий аудит и эксплицитная фиксация параметров билинейного ресайза RapidOCR (`max_side_len: 2000`, `min_side_len: 30`, `det_limit_side_len: 736`, `det_limit_type: min`), гарантирующих идентичную геометрию в базисах $B_0, B_1, B_2$. Строгий контракт `BaseOCREngine` (`recognize(image, document_id) -> OCRResult`) и принцип Strict GT Isolation полностью сохранены (ноль утечек разметки, отсутствие встроенных CV-улучшений в OCR). Обновлены конфигурация `configs/ocr.yaml`, зависимости в `requirements.txt` и `pyproject.toml`, скрипт `scripts/run_ocr_baseline.py`. Статус бенчмарка реальных данных строго зафиксирован как `REAL-DATA OCR BASELINE: PENDING`. Добавлен исчерпывающий тестовый набор `tests/test_ocr_stack.py` (9 тестов). Все 346 тестов проекта пройдены с общим покрытием 94%. Принят `ADR-015`.
+
 - **TASK-007 — Preprocessing Engine + B0/B1/B2 Baselines**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).

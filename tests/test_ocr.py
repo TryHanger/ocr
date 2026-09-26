@@ -168,7 +168,7 @@ def test_rapid_ocr_inference_on_text_image():
     assert "INVOICE" in result.full_text or "TOTAL" in result.full_text
     assert result.processing_time_ms is not None and result.processing_time_ms > 0
     assert result.model_name == "RapidOCR"
-    assert "PP-OCRv4" in str(result.model_version)
+    assert "PP-OCRv6" in str(result.model_version)
 
     # Verify token bounding boxes and confidences
     for tok in result.tokens:

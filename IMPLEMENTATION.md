@@ -95,9 +95,10 @@
   - `tests/test_dataset_sroie.py` — unit-тесты адаптера `SROIEAdapter` (детерминированность, неизменяемость GT, обработка ошибок, загрузка RGB, сохранение необрезанных координат, строгая проверка 8 координат).
   - `tests/test_audit_sroie.py` — unit-тесты проверок C-01 – C-10 скрипта аудита целостности датасета.
   - `tests/test_degradation.py` — исчерпывающие unit-тесты для 8 примитивов деградаций (severity 0 identity, неизменяемость входа, uint8/shape contracts, детерминизм, стохастические сиды, монотонность, пайплайн, фабрика, калибровочные метрики и CLI).
-  - `tests/test_ocr_metrics.py` — unit-тесты метрик CER, WER, Character-NED similarity (граничные случаи, edge-cases, Unicode NFC, нормализация).
-  - `tests/test_ocr.py` — unit-тесты контрактов OCR, входной валидации, строгого отсутствия утечек GT в primary API, порядка чтения, инференса RapidOCR, пустого изображения, диагностического режима и runner CLI.
-  - `tests/test_preprocessing.py` — unit-тесты контрактов препроцессинга, P1–P5 примитивов, неизменяемости входа, детерминизма, отсутствия утечек GT, пайплайна, фабрики и аналитических базисов B0/B1/B2.
+    - `tests/test_ocr_metrics.py` — unit-тесты метрик CER, WER, Character-NED similarity (граничные случаи, edge-cases, Unicode NFC, нормализация).
+    - `tests/test_ocr.py` — unit-тесты контрактов OCR, входной валидации, строгого отсутствия утечек GT в primary API, порядка чтения, инференса RapidOCR, пустого изображения, диагностического режима и runner CLI.
+    - `tests/test_ocr_stack.py` — исчерпывающие unit- и интеграционные тесты стека OCR: верификация моделей PP-OCRv6, проверка криптографических SHA256 хешей, интроспекция манифеста (configured, resolved, environment), поддержка RGB/Grayscale/Binary, аудит политики ресайза, детерминизм инференса и тайминги на CPU.
+    - `tests/test_preprocessing.py` — unit-тесты контрактов препроцессинга, P1–P5 примитивов, неизменяемости входа, детерминизма, отсутствия утечек GT, пайплайна, фабрики и аналитических базисов B0/B1/B2.
 
 ---
 
@@ -108,8 +109,8 @@
   - `opencv-python>=4.8.0` (фактически установлен: 4.12.0)
   - `PyYAML>=6.0` (фактически установлен: 6.0.3)
   - `pytest>=7.0.0` (фактически установлен: 8.4.2)
-  - `rapidocr-onnxruntime>=1.3.0` (фактически установлен: 1.4.4)
-  - `onnxruntime>=1.15.0` (фактически установлен: 1.30.0)
+  - `rapidocr==3.9.2` (зафиксирован точно, PP-OCRv6 small models bundled)
+  - `onnxruntime==1.30.0` (зафиксирован точно, CPUExecutionProvider locked)
 - В `pyproject.toml` для разработки подключен:
   - `pytest-cov>=4.0.0` (фактически установлен: 7.1.0)
 - Тяжелые ML/OCR фреймворки с внешними компилируемыми бинарниками или CUDA-зависимостями (PyTorch, Transformers, PaddlePaddle, Tesseract) в проект **не подключались**.
@@ -117,11 +118,11 @@
 ---
 
 ## 4. Состояние ML/OCR/KIE модулей
-- **Research Protocol & Dataset Strategy:** Полностью зафиксированы и заморожены (**FROZEN**, ADR-008 – ADR-014).
+- **Research Protocol & Dataset Strategy:** Полностью зафиксированы и заморожены (**FROZEN**, ADR-008 – ADR-015).
 - **Dataset Adapter:** Реализован (`BaseDatasetAdapter`, `SROIEAdapter`) в полном соответствии с raw-GT семантикой TASK-004-R1 (сохранение геометрии без клиппинга, строгая проверка 8 координат, неизменяемость транскрипций).
 - **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10, поддержка аргументов `--mode` и `--strict`, очистка C-03 от порогов площади, явная фиксация режима фикстур в отчете).
 - **Degradation Engine:** Реализован (`src/degradation/`, примитивы D1–D8, `DegradationPipeline`, `get_degradation()`, конфигурация `configs/degradation.yaml`, скрипт калибровки `scripts/calibrate_degradations.py`, калибровочные артефакты в `experiments/calibration/`). Полный детерминизм, строгий инвариант severity 0 identity, неизменяемость входов, сохранение размерностей и типа uint8. Текущие параметры зафиксированы как стартовый предварительный набор (**provisional / fixture-based**); окончательная исследовательская калибровка на валидационном сплите SROIE ($N=126$) ожидает появления датасета (`real_data_calibration: PENDING`, `calibration_dataset: synthetic_fixture`, `final_calibration_completed: false`).
-- **OCR Engine Baseline:** Реализован (`src/ocr/`, `RapidOCREngine` на базе PP-OCRv4 ONNX, `BaseOCREnginePrimitive`, фабрика `get_ocr_engine()`, `MockOCREngine`, конфигурация `configs/ocr.yaml`, скрипт `scripts/run_ocr_baseline.py`). Полная изоляция от Ground Truth в основном контракте `recognize(image, document_id) -> OCRResult`, отдельный диагностический метод `diagnostic_gt_region_recognition(image, document_id, gt_boxes)`. Детерминированная эвристика порядка чтения (линейная кластеризация по $Y$ с настраиваемым допуском `line_tolerance_factor=0.5` и сортировка слева направо по $X$), сохранение исходных полигонов в `metadata["raw_quadrilaterals"]` и derived `BoundingBox` без клиппинга. Статус оценки на реальном датасете: `REAL-DATA OCR BASELINE: PENDING` (запуск на фикстурах для валидации пайплайна).
+- **OCR Engine Baseline & Reproducibility Lock:** Актуализирован и зафиксирован на стек RapidOCR (`rapidocr==3.9.2`) + ONNX Runtime (`onnxruntime==1.30.0`) + PP-OCRv6 small (детекция и распознавание) и мобильный классификатор ориентации (TASK-008, ADR-015). Реализована динамическая интроспекция активной сессии ONNX Runtime с криптографической проверкой SHA256 хешей файлов весов (`verify_model_stack()`). Автоматически экспортируется манифест `experiments/runs/ocr_stack_manifest.json` с разделением `configured`, `resolved` и `environment`. Эксплицитно зафиксирована политика билинейного ресайза RapidOCR (`max_side_len: 2000`, `min_side_len: 30`, `det_limit_side_len: 736`, `det_limit_type: min`), являющаяся строго идентичной для базисов B0, B1 и B2. Полная изоляция от Ground Truth в основном контракте `recognize(image, document_id) -> OCRResult`, отдельный диагностический метод `diagnostic_gt_region_recognition(image, document_id, gt_boxes)`. Детерминированная эвристика порядка чтения (линейная кластеризация по $Y$ с настраиваемым допуском `line_tolerance_factor=0.5` и сортировка слева направо по $X$), сохранение исходных полигонов в `metadata["raw_quadrilaterals"]` и derived `BoundingBox` без клиппинга. Статус оценки на реальном датасете: `REAL-DATA OCR BASELINE: PENDING` (запуск на фикстурах для валидации пайплайна).
 - **Evaluation & Metrics:** Реализованы метрики OCR (`src/evaluation/ocr_metrics.py`): CER, WER и строго определенный **Character-NED similarity** ($1.0 - \frac{\text{edit\_distance}}{\max(\text{len}(pred), \text{len}(gt), 1)}$) в диапазоне $[0.0, 1.0]$. Симметричная нормализация текста OCR (Unicode NFC, схлопывание пробелов, удаление управляющих символов), сохранение 4 представлений текста (`raw_pred`, `raw_gt`, `norm_pred`, `norm_gt`). KIE evaluator и метрики KIE еще не реализованы.
 - **Preprocessing Pipeline & B0/B1/B2 Baselines:** Реализован (`src/preprocessing/`, примитивы P1–P5, `PreprocessingPipeline`, фабрика `get_preprocessor()`, раннер `run_b0_b1_b2_comparison()`, конфигурация `configs/preprocessing.yaml`, CLI `scripts/run_preprocessing_baseline.py`). Полная изоляция от Ground Truth. Текущие параметры зафиксированы как предварительные (**provisional**); статус оценки на реальных данных зафиксирован как `REAL-DATA PREPROCESSING BASELINE: PENDING`.
 - **KIE Extractor:** Не реализован (контракт описан через `BaseKIEEngine` и `KIEResult`).
@@ -133,9 +134,9 @@
 ## 5. Тестирование и покрытие
 - Команда запуска тестов:
   ```bash
-  pytest -v --cov=src/core --cov=src/datasets --cov=src/degradation --cov=src/ocr --cov=src/evaluation --cov=src/preprocessing --cov=scripts.audit_sroie --cov=scripts.calibrate_degradations --cov=scripts.run_ocr_baseline --cov=scripts.run_preprocessing_baseline --cov-report=term-missing
+  pytest -v --cov=src --cov-report=term-missing
   ```
-- Результат: **337 тестов пройдено успешно**, суммарное покрытие: **94%** (2078 statements, 119 missed):
+- Результат: **346 тестов пройдено успешно**, суммарное покрытие: **94%** (1519 statements, 91 missed):
   - `src/core`: **100%** (368 statements, 0 missed)
   - `src/datasets`: **100%** (159 statements, 0 missed)
   - `src/degradation`: **98%** (241 statements, 5 missed)

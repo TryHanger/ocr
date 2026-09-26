@@ -68,14 +68,40 @@ def run_ocr_baseline(
     # 3. Instantiate OCR Engine
     engine_cfg = cfg.get("engine", {})
     reading_order_cfg = cfg.get("reading_order", {})
+    resize_cfg = cfg.get("resize_policy", {})
     engine_name = engine_cfg.get("name", "rapidocr")
 
-    engine_params = {
+    engine_params: Dict[str, Any] = {
         "line_tolerance_factor": reading_order_cfg.get("line_tolerance_factor", 0.5),
         "text_score": engine_cfg.get("parameters", {}).get("text_score", 0.5),
         "min_confidence": engine_cfg.get("parameters", {}).get("min_confidence", 0.0),
+        "use_cls": engine_cfg.get("parameters", {}).get("use_cls", True),
     }
+    if "max_side_len" in resize_cfg:
+        engine_params["max_side_len"] = resize_cfg["max_side_len"]
+    if "min_side_len" in resize_cfg:
+        engine_params["min_side_len"] = resize_cfg["min_side_len"]
+    if "det_limit_side_len" in resize_cfg:
+        engine_params["det_limit_side_len"] = resize_cfg["det_limit_side_len"]
+    if "det_limit_type" in resize_cfg:
+        engine_params["det_limit_type"] = resize_cfg["det_limit_type"]
+
     ocr_engine = get_ocr_engine(engine_name, engine_params)
+
+    # Verify model stack and export manifest if supported
+    manifest = None
+    if hasattr(ocr_engine, "verify_model_stack"):
+        is_valid, errors = ocr_engine.verify_model_stack()
+        if not is_valid:
+            error_msg = f"OCR Model Stack Verification Failed: {errors}"
+            print(f"ERROR: {error_msg}", file=sys.stderr)
+            raise RuntimeError(error_msg)
+    if hasattr(ocr_engine, "get_model_manifest"):
+        manifest = ocr_engine.get_model_manifest()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = output_dir / "ocr_stack_manifest.json"
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     # 4. Run Evaluation
     results_list: List[Dict[str, Any]] = []
@@ -138,10 +164,13 @@ def run_ocr_baseline(
         ),
         "engine": {
             "name": engine_name,
-            "version": engine_cfg.get("package_version", "1.4.4"),
+            "version": engine_cfg.get("package_version", "3.9.2"),
             "models": engine_cfg.get("models", {}),
             "reading_order_tolerance": reading_order_cfg.get("line_tolerance_factor", 0.5),
+            "manifest_file": "ocr_stack_manifest.json" if manifest else None,
         },
+        "ocr_stack": manifest if manifest else {},
+        "resize_policy": resize_cfg,
         "summary_metrics": mean_metrics,
         "documents": results_list,
     }
