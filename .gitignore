@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# Data & large archives
+data/*
+!data/.gitkeep
+*.zip
+*.tar
+*.gz
+
+# Model weights
+models/
+weights/
+checkpoints/
+
+# Output & experiment artifacts
+outputs/
+results/
+logs/
+experiments/runs/*
+!experiments/runs/.gitkeep
+experiments/figures/*
+!experiments/figures/.gitkeep
+
+# OS generated
+.DS_Store
+Thumbs.db
