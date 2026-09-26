@@ -6,6 +6,11 @@
 
 ## Completed
 
+- **TASK-003-R2 — Research Freeze**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно. Исследовательский протокол **FROZEN**.
+  - *Результат:* Зафиксирован единый Source of Truth датасета SROIE (`urbikn/sroie-datasetv2`, 626 train, 347 test). Детально объяснено происхождение расхождения 347 vs 361 (14 документов Task 1/2 без Task 3 KIE GT). Утверждена схема сплитов (train 500/126, test 100/347). Численные параметры деградаций вынесены из методологии в процедуру будущей калибровки на validation-сплите. Гипотезы H1–H4 очищены от предвзятых численных порогов. Зафиксированы метрики OCR/KIE, протоколы reading order, краевые случаи, симметричная нормализация и failure modes. Создан аудит-документ `docs/dataset_integrity.md`, обновлены `docs/research_methodology.md`, `DECISIONS.md` (ADR-012), `IMPLEMENTATION.md`.
+
 - **TASK-003-R1 — Research Validation: Dataset и методология OCR/KIE Robustness**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно.
