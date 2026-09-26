@@ -195,10 +195,18 @@ def run_calibration(
 
     degradations_cfg = cfg.get("degradations", {})
     report_degradations: Dict[str, Any] = {}
+    is_real = (real_data_status == "COMPLETED")
+    calibration_dataset = "sroie_validation" if is_real else "synthetic_fixture"
+    parameter_status = "final_research_calibrated" if is_real else "provisional / fixture-based"
+
     selected_config: Dict[str, Any] = {
         "version": cfg.get("version", "1.0.0"),
         "calibration_date": datetime.now().isoformat(),
-        "real_data_status": real_data_status,
+        "parameter_status": parameter_status,
+        "real_data_calibration": real_data_status,
+        "calibration_dataset": calibration_dataset,
+        "research_validation_size": 126,
+        "final_calibration_completed": is_real,
         "data_source": data_source,
         "degradations": {},
     }
@@ -324,11 +332,15 @@ def run_calibration(
     report = {
         "title": "Document Image Degradation Severity Calibration Report",
         "timestamp": datetime.now().isoformat(),
+        "parameter_status": parameter_status,
         "real_data_calibration": real_data_status,
+        "calibration_dataset": calibration_dataset,
+        "research_validation_size": 126,
+        "final_calibration_completed": is_real,
         "data_source": data_source,
         "num_calibration_images": len(images),
         "notes": (
-            "Calibration conducted on synthetic fixture images for framework verification. "
+            "Current parameters are provisional / fixture-based serving as an initial starting set. "
             "Real SROIE validation data calibration remains PENDING until Kaggle dataset artifact is provided."
             if real_data_status == "PENDING"
             else "Calibration conducted on canonical SROIE 126-sample validation split."

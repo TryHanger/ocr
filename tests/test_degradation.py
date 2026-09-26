@@ -528,6 +528,10 @@ def test_calibration_runner_execution(tmp_path: Path):
     )
 
     assert report["real_data_calibration"] in ("COMPLETED", "PENDING")
+    assert report["calibration_dataset"] in ("synthetic_fixture", "sroie_validation")
+    assert report["research_validation_size"] == 126
+    assert isinstance(report["final_calibration_completed"], bool)
+    assert report["parameter_status"] in ("provisional / fixture-based", "final_research_calibrated")
     assert "degradations" in report
     assert len(report["degradations"]) == 8
 

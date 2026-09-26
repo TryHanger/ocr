@@ -23,7 +23,7 @@
 ## 2. Структура каталогов
 - `configs/` — YAML-конфигурации:
   - `configs/sroie.yaml`: конфигурация датасета SROIE (канонические параметры, пути, ожидаемые объемы сплитов 626/347, ключи KIE, минимальные размеры).
-  - `configs/degradation.yaml`: конфигурация примитивов деградаций D1–D8, сетки параметров кандидатов, калиброванные параметры для severities 1..4 и сиды.
+  - `configs/degradation.yaml`: конфигурация примитивов деградаций D1–D8, сетки параметров кандидатов, предварительные калибровочные параметры (provisional / fixture-based) для severities 1..4 и сиды.
 - `data/` — для локального размещения датасетов и разметки (реальные данные в Git отсутствуют).
 - `docs/` — аналитическая, методологическая и аудиторская документация:
   - `docs/dataset_analysis.md`.
@@ -31,8 +31,8 @@
   - `docs/research_methodology.md`.
 - `experiments/audit/` — каталог для сохранения машиночитаемых отчетов аудита целостности данных (`sroie_integrity.json`).
 - `experiments/calibration/` — артефакты калибровки уровней severity 1..4:
-  - `experiments/calibration/calibration_config.yaml`: параметры severity 1..4 для каждого типа.
-  - `experiments/calibration/calibration_report.json`: полный машиночитаемый отчет с метриками (PSNR, SSIM, MAE, Laplacian, Luminance) и обоснованием выбора.
+  - `experiments/calibration/calibration_config.yaml`: параметры severity 1..4 для каждого типа (предварительный стартовый набор provisional / fixture-based).
+  - `experiments/calibration/calibration_report.json`: полный машиночитаемый отчет с метриками (PSNR, SSIM, MAE, Laplacian, Luminance) и обоснованием выбора; статус зафиксирован как `real_data_calibration: PENDING`, `calibration_dataset: synthetic_fixture`, `research_validation_size: 126`, `final_calibration_completed: false`.
   - `experiments/calibration/samples/`: визуальные образцы каждого уровня деградации (severities 0..4).
 - `experiments/runs/` — для сохранения метрик и логов (запуски пока не производились).
 - `experiments/figures/` — для сохранения графиков.
@@ -94,7 +94,7 @@
 - **Research Protocol & Dataset Strategy:** Полностью зафиксированы и заморожены (**FROZEN**, ADR-008 – ADR-012).
 - **Dataset Adapter:** Реализован (`BaseDatasetAdapter`, `SROIEAdapter`) в полном соответствии с raw-GT семантикой TASK-004-R1 (сохранение геометрии без клиппинга, строгая проверка 8 координат, неизменяемость транскрипций).
 - **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10, поддержка аргументов `--mode` и `--strict`, очистка C-03 от порогов площади, явная фиксация режима фикстур в отчете).
-- **Degradation Engine:** Реализован (`src/degradation/`, примитивы D1–D8, `DegradationPipeline`, `get_degradation()`, конфигурация `configs/degradation.yaml`, скрипт калибровки `scripts/calibrate_degradations.py`, калибровочные артефакты в `experiments/calibration/`). Полный детерминизм, строгий инвариант severity 0 identity, неизменяемость входов, сохранение размерностей и типа uint8.
+- **Degradation Engine:** Реализован (`src/degradation/`, примитивы D1–D8, `DegradationPipeline`, `get_degradation()`, конфигурация `configs/degradation.yaml`, скрипт калибровки `scripts/calibrate_degradations.py`, калибровочные артефакты в `experiments/calibration/`). Полный детерминизм, строгий инвариант severity 0 identity, неизменяемость входов, сохранение размерностей и типа uint8. Текущие параметры зафиксированы как стартовый предварительный набор (**provisional / fixture-based**); окончательная исследовательская калибровка на валидационном сплите SROIE ($N=126$) ожидает появления датасета (`real_data_calibration: PENDING`, `calibration_dataset: synthetic_fixture`, `final_calibration_completed: false`).
 - **Preprocessing Pipeline:** Не реализован (контракт описан через `BasePreprocessor` и `PreprocessingSpec`).
 - **OCR Engine Abstraction & Models:** Не реализованы (контракт описан через `BaseOCREngine`, `OCRToken`, `OCRResult`).
 - **KIE Extractor:** Не реализован (контракт описан через `BaseKIEEngine` и `KIEResult`).

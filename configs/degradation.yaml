@@ -1,6 +1,8 @@
 # Configuration for Document Image Degradation Engine and Severity Calibration
 version: "1.0.0"
 default_seed: 42
+parameter_status: "provisional / fixture-based"
+note: "Initial provisional parameter set. Final research calibration on the canonical 126-document SROIE validation split will be conducted once the dataset artifact is available."
 
 degradations:
   gaussian_blur:
