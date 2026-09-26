@@ -8,14 +8,21 @@
 
 ## 1. Репозиторий и инфраструктура
 - **Git-репозиторий:** инициализирован, ветка `main` синхронизирована с `origin https://github.com/TryHanger/ocr.git`.
-- **Игнорирование артефактов (`.gitignore`):** настроено исключение виртуальных окружений, кэшей Python/pytest, данных (`data/*`), весов моделей (`models/`, `weights/`), результатов прогонов (`experiments/runs/*`) и системных файлов.
-- **Управляющая документация:** созданы и согласованы файлы `CLAUDE.md`, `TASKS.md`, `IMPLEMENTATION.md`, `DECISIONS.md`.
+- **Игнорирование артефактов (`.gitignore`):** настроено исключение виртуальных окружений, кэшей Python/pytest, данных (`data/*`), весов моделей (`models/`, `weights/`), результатов прогонов (`experiments/runs/*`), артефактов coverage (`.coverage*`) и системных файлов.
+- **Управляющая и аналитическая документация:**
+  - `CLAUDE.md`: протокол управления проектом.
+  - `TASKS.md`: трекер задач.
+  - `IMPLEMENTATION.md`: фактическое состояние проекта.
+  - `DECISIONS.md`: журнал ADR (ADR-001 – ADR-008).
+  - `docs/dataset_analysis.md`: сравнительный анализ 4 кандидатов датасетов, обоснование выбора SROIE, правила data leakage и архитектура адаптера.
 
 ---
 
 ## 2. Структура каталогов
 - `configs/` — для YAML-конфигураций экспериментов (файлы конфигов пока не созданы).
-- `data/` — для локального размещения датасетов и разметки (данные отсутствуют).
+- `data/` — для локального размещения датасетов и разметки (реальные данные в Git отсутствуют).
+- `docs/` — аналитическая и проектная документация:
+  - `docs/dataset_analysis.md`.
 - `experiments/runs/` — для сохранения метрик и логов (запуски пока не производились).
 - `experiments/figures/` — для сохранения графиков.
 - `kaggle/` — целевая директория для развертывания ядра Kaggle.
@@ -53,7 +60,7 @@
 ---
 
 ## 4. Состояние ML/OCR/KIE модулей
-- **Dataset Loader:** Не реализован (контракт описан через `DocumentMetadata`, `OCRGroundTruth`, `KIEGroundTruth`).
+- **Dataset Strategy:** Зафиксирован выбор датасета SROIE (ADR-008) и архитектура `BaseDatasetAdapter`. Реальный loader пока не написан.
 - **Degradation Engine:** Не реализован (контракт описан через `BaseDegradation` и `DegradationSpec`).
 - **Preprocessing Pipeline:** Не реализован (контракт описан через `BasePreprocessor` и `PreprocessingSpec`).
 - **OCR Engine Abstraction & Models:** Не реализованы (контракт описан через `BaseOCREngine`, `OCRToken`, `OCRResult`).
