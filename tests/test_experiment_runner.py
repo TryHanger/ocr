@@ -314,3 +314,96 @@ def test_runner_artifact_schema(tmp_path: Path):
     assert "end_time" in manifest["runtime_metadata"]
     assert "duration_seconds" in manifest["runtime_metadata"]
     assert manifest["num_conditions"] == 5
+
+    # Summary schema checks (TASK-010-R2)
+    with open(run_dir / "summary.json", "r", encoding="utf-8") as f:
+        summary_data = json.load(f)
+
+    assert "conditions" in summary_data
+    assert len(summary_data["conditions"]) == 5
+
+    for cid, c_data in summary_data["conditions"].items():
+        assert "document_counts" in c_data
+        assert "ocr" in c_data
+        assert "kie" in c_data
+
+        # OCR metrics & Bootstrap CIs
+        ocr = c_data["ocr"]
+        for m in ("cer_raw", "wer_raw", "char_ned_raw", "cer_normalized", "wer_normalized", "char_ned_normalized"):
+            assert m in ocr
+            assert "mean" in ocr[m]
+            assert "median" in ocr[m]
+            assert "std" in ocr[m]
+            assert "ci_95" in ocr[m]
+            assert len(ocr[m]["ci_95"]) == 2
+
+        # KIE analytical metrics & Bootstrap CIs
+        kie = c_data["kie"]
+        assert "per_field" in kie
+        assert "raw_doc_em_rate" in kie
+        assert "raw_doc_em_ci_95" in kie
+        assert "normalized_doc_em_rate" in kie
+        assert "normalized_doc_em_ci_95" in kie
+        assert "macro_f1_normalized" in kie
+        assert "macro_f1_ci_95" in kie
+
+        # SROIE official-compatible entity metrics per condition
+        assert "sroie_official_compatible" in kie
+        sroie_off = kie["sroie_official_compatible"]
+        assert "entity_precision" in sroie_off
+        assert "entity_recall" in sroie_off
+        assert "entity_hmean" in sroie_off
+        assert "total_gt_entities" in sroie_off
+        assert "total_pred_entities" in sroie_off
+        assert "total_matched_entities" in sroie_off
+        assert 0.0 <= sroie_off["entity_precision"] <= 1.0
+        assert 0.0 <= sroie_off["entity_recall"] <= 1.0
+        assert 0.0 <= sroie_off["entity_hmean"] <= 1.0
+
+
+def test_aggregate_condition_records_sroie_official_compatible():
+    """Verify aggregate_condition_records explicitly computes SROIE official-compatible entity metrics."""
+    records = [
+        {
+            "status": "success",
+            "ocr_metrics": {
+                "cer_raw": 0.1, "wer_raw": 0.1, "char_ned_raw": 0.9,
+                "cer_normalized": 0.05, "wer_normalized": 0.05, "char_ned_normalized": 0.95,
+            },
+            "kie_metrics": {
+                "field_matches_raw": {"company": True, "date": True, "address": False, "total": False},
+                "field_matches_normalized": {"company": True, "date": True, "address": True, "total": False},
+                "raw_doc_em": False,
+                "normalized_doc_em": False,
+                "normalized_ground_truth": {"company": "A", "date": "B", "address": "C", "total": "D"},
+                "normalized_predictions": {"company": "A", "date": "B", "address": "C", "total": "X"},
+            },
+        },
+        {
+            "status": "success",
+            "ocr_metrics": {
+                "cer_raw": 0.0, "wer_raw": 0.0, "char_ned_raw": 1.0,
+                "cer_normalized": 0.0, "wer_normalized": 0.0, "char_ned_normalized": 1.0,
+            },
+            "kie_metrics": {
+                "field_matches_raw": {"company": True, "date": True, "address": True, "total": True},
+                "field_matches_normalized": {"company": True, "date": True, "address": True, "total": True},
+                "raw_doc_em": True,
+                "normalized_doc_em": True,
+                "normalized_ground_truth": {"company": "A", "date": "B", "address": "C", "total": "D"},
+                "normalized_predictions": {"company": "A", "date": "B", "address": "C", "total": "D"},
+            },
+        },
+    ]
+
+    res = aggregate_condition_records(records, bootstrap_seed=42)
+    sroie_off = res["kie"]["sroie_official_compatible"]
+    # Total GT entities = 4 + 4 = 8
+    # Total Pred entities = 4 + 4 = 8
+    # Total Matched entities = 3 (doc 1) + 4 (doc 2) = 7
+    assert sroie_off["total_gt_entities"] == 8
+    assert sroie_off["total_pred_entities"] == 8
+    assert sroie_off["total_matched_entities"] == 7
+    assert sroie_off["entity_precision"] == round(7 / 8, 4)
+    assert sroie_off["entity_recall"] == round(7 / 8, 4)
+    assert sroie_off["entity_hmean"] == round(7 / 8, 4)
