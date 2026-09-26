@@ -4,6 +4,32 @@
 
 *(Нет активных задач)*
 
+- **TASK-010 — Unified Experiment Runner & Experiment Matrix**
+  - *Дата завершения:* 2026-09-26 (с учетом уточнений TASK-010-R1)
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Реализован единый детерминированный исследовательский раннер `UnifiedExperimentRunner` (`src/experiments/`) и CLI точка входа `scripts/run_experiment.py` для проведения экспериментов по устойчивости OCR и downstream KIE к синтетическим деградациям и влияния препроцессинга ($B_0, B_1, B_2$):
+    1. *Канонический конвейер со строгой изоляцией:* Реализована строгая последовательность шагов `SROIE document → split → degradation → preprocessing → OCR → KIE → GT loading → evaluation → artifacts`. OCR и KIE движки никогда не получают Ground Truth данные (ни боксы, ни транскрипции, ни сущности, ни адаптер датасета).
+    2. *Семантика экспериментальных условий:*
+       - Ровно одно контрольное условие: `D0_S0_P0` (`baseline_type="B0"`).
+       - $B_1$ (только деградация): $D_1..D_8 \times \text{severity} \{1..4\} \times P_0$.
+       - $B_2$ (деградация + препроцессинг): $D_1..D_8 \times \text{severity} \{1..4\} \times P^*$.
+       - Severity 0 для деградаций $D_1..D_8$ строго запрещен (валидация инварианта в `ExperimentCondition`).
+       - Минимальная CPU smoke-матрица: `D0_S0_P0`, `D1_S1_P0`, `D1_S4_P0`, `D1_S1_P_clahe`, `D1_S4_P_clahe`.
+    3. *Защита тестового сплита и политика фикстур:*
+       - Запрос сплита `test` ($N=347$) падает с громкой ошибкой, если не передан флаг `--allow-test`.
+       - При отсутствии реальных данных SROIE запуск без флага `--allow-fixture` падает с ошибкой `REAL_DATA_REQUIRED`. Фикстуры никогда не подменяют реальные данные silently; статус данных явно фиксируется как `PENDING_REAL_DATA`.
+    4. *Детерминированный вывод сидов:*
+       - Реализована функция `derive_seed(experiment_seed, doc_id, deg_type, severity, prep_id)` на базе SHA-256 с гарантией ортогональности и независимости сидов.
+    5. *Статистика и bootstrap:*
+       - Реализован расчет доверительных интервалов bootstrap 95% CI (1000 итераций) на уровне документов для всех OCR и KIE метрик (mean, median, std, ci_95) с фиксированным сидом (`seed + 10000`).
+    6. *Учет сбоев (Failure Accounting):*
+       - Ошибки OCR, KIE и evaluation фиксируются в поле `status` (`ocr_failed`, `kie_failed`, `evaluation_failed`) с сохранением типа и текста исключения без silent drop документов.
+    7. *Артефакты и воспроизводимость:*
+       - Директория прогона `experiments/runs/<experiment_id>/` содержит `config.yaml`, `manifest.json` (с config hash, git commit, runtime metadata, data_status), `per_document.jsonl`, `summary.json`, `logs/run.log`.
+    8. *Тестирование:*
+       - Добавлены тесты `tests/test_experiment_runner.py` (13 тестов, 83% покрытие модуля `src/experiments`). Все 391 тест проекта пройдены со 100% успехом и суммарным покрытием 92%.
+       - Проведен контролируемый smoke-прогон на Development-выборке (`smoke_run --allow-fixture`), статус зафиксирован как `PENDING_REAL_DATA` (инженерная верификация, без научных утверждений).
+
 - **TASK-009 — KIE Baseline Engine + Evaluation**
   - *Дата завершения:* 2026-09-26 (с учетом уточнений TASK-009-R1)
   - *Статус:* Завершена успешно (PASS).

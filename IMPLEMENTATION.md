@@ -26,6 +26,7 @@
   - `configs/degradation.yaml`: конфигурация примитивов деградаций D1–D8, сетки параметров кандидатов, предварительные калибровочные параметры (provisional / fixture-based) для severities 1..4 и сиды.
   - `configs/ocr.yaml`: конфигурация базового OCR-движка RapidOCR, моделей ONNX PP-OCRv4, параметров порядка чтения (reading order tolerance) и метрик.
   - `configs/preprocessing.yaml`: конфигурация примитивов предобработки P1–P5, кандидатных сеток параметров, предварительных (provisional) настроек и пайплайнов для baselines.
+  - `configs/experiment.yaml`: полная матрица устойчивости OCR/KIE (B0, B1, B2) и параметры CPU smoke-матрицы.
 - `data/` — для локального размещения датасетов и разметки (реальные данные в Git отсутствуют).
 - `docs/` — аналитическая, методологическая и аудиторская документация:
   - `docs/dataset_analysis.md`.
@@ -39,6 +40,7 @@
 - `experiments/runs/` — артефакты прогонов:
   - `experiments/runs/ocr_baseline_report.json`: отчет прогона базового OCR пайплайна со статусом `real_data_ocr_baseline: "PENDING"`.
   - `experiments/runs/preprocessing_baseline_report.json`: отчет прогона B0/B1/B2 препроцессинга со статусом `real_data_preprocessing_baseline: "PENDING"`.
+  - `experiments/runs/<experiment_id>/`: структурированные директории запусков `UnifiedExperimentRunner` (`config.yaml`, `manifest.json`, `per_document.jsonl`, `summary.json`, `logs/run.log`).
 - `experiments/figures/` — для сохранения графиков.
 - `kaggle/` — целевая директория для развертывания ядра Kaggle.
 - `scripts/` — директория для CLI утилит запуска:
@@ -46,6 +48,8 @@
   - `scripts/calibrate_degradations.py`: CLI-скрипт калибровки параметров деградаций на validation-выборке и генерации калибровочных артефактов.
   - `scripts/run_ocr_baseline.py`: CLI-скрипт сквозного прогона OCR-пайплайна на SROIE с замером CER, WER и Character-NED similarity.
   - `scripts/run_preprocessing_baseline.py`: CLI-скрипт сравнительного прогона аналитических базисов B0, B1, B2 на SROIE.
+  - `scripts/run_kie_baseline.py`: CLI-скрипт сквозного прогона KIE baseline на SROIE.
+  - `scripts/run_experiment.py`: единая CLI точка входа для воспроизводимого запуска экспериментальной матрицы OCR/KIE ($B_0, B_1, B_2$).
 - `src/` — корень исходного кода:
   - `src/core/` — **реализован**:
     - `src/core/schemas.py`: DTO и схемы данных (`BoundingBox`, `OCRToken`, `OCRResult`, `KIEResult`, `DocumentMetadata`, `DegradationSpec`, `PreprocessingSpec`, `ExperimentResult`, `OCRGroundTruth`, `KIEGroundTruth`) со строгой валидацией инвариантов и bidirectional JSON/dict сериализацией. `BoundingBox` разрешает координаты вне границ изображения и отрицательные координаты, сохраняя геометрию первоисточника без искажений.
@@ -83,7 +87,18 @@
     - `src/preprocessing/pipeline.py`: класс последовательной композиции `PreprocessingPipeline` и фабрика `get_preprocessor()`.
     - `src/preprocessing/baseline.py`: бейслайн-раннер `run_b0_b1_b2_comparison` для сквозного сравнительного выполнения B0, B1, B2.
     - `src/preprocessing/__init__.py`: публичные экспорты модуля.
-  - `src/kie/` (реализация алгоритмов отсутствует).
+  - `src/kie/` — **реализован**:
+    - `src/kie/rules/`: примитивы извлечения сущностей по правилам (`company.py`, `date.py`, `address.py`, `total.py`, `candidate.py`). Сохранение аудита происхождения токенов (`metadata["field_provenance"]`).
+    - `src/kie/rule_based.py`: `RuleBasedKIEEngine`, реализующий `BaseKIEEngine` строго без утечки GT: `extract(ocr_result, document_id) -> KIEResult`.
+    - `src/kie/mock.py`: детерминированный `MockKIEEngine`.
+    - `src/kie/factory.py`: реестр и фабрика `get_kie_engine(name, params)`.
+  - `src/experiments/` — **реализован**:
+    - `src/experiments/seed.py`: детерминированный вывод независимых 32-битных сидов `derive_seed` на базе SHA-256.
+    - `src/experiments/conditions.py`: DTO `ExperimentCondition`, форматирование кодов условий (`D0_S0_P0`, `D1_S1_P_clahe`), валидация запрета severity 0 для $D_1..D_8$, генератор полной матрицы и минимальной CPU smoke-матрицы.
+    - `src/experiments/split.py`: резолвер сплитов (`development`, `validation`, `test` с защитным guard `--allow-test`) и проверка наличия реальных данных (`--allow-fixture` guard).
+    - `src/experiments/config.py`: загрузка YAML и канонический расчет SHA-256 хеша конфигурации `compute_config_hash`.
+    - `src/experiments/bootstrap.py`: расчет 95% доверительных интервалов bootstrap (1000 итераций) на уровне документов и агрегация результатов условий.
+    - `src/experiments/runner.py`: `UnifiedExperimentRunner` со строгим порядком исполнения `degradation → preprocessing → OCR → KIE → GT loading → evaluation` и детальным учетом сбоев (failure accounting).
   - `src/visualization/` (реализация отсутствует).
 - `tests/` — тестовый набор:
   - `tests/fixtures/sroie/` — синтетические фикстуры датасета (валидные, с дефектами OCR, KIE, отсутствующими парами, координатами вне границ кадра).
@@ -95,10 +110,14 @@
   - `tests/test_dataset_sroie.py` — unit-тесты адаптера `SROIEAdapter` (детерминированность, неизменяемость GT, обработка ошибок, загрузка RGB, сохранение необрезанных координат, строгая проверка 8 координат).
   - `tests/test_audit_sroie.py` — unit-тесты проверок C-01 – C-10 скрипта аудита целостности датасета.
   - `tests/test_degradation.py` — исчерпывающие unit-тесты для 8 примитивов деградаций (severity 0 identity, неизменяемость входа, uint8/shape contracts, детерминизм, стохастические сиды, монотонность, пайплайн, фабрика, калибровочные метрики и CLI).
-    - `tests/test_ocr_metrics.py` — unit-тесты метрик CER, WER, Character-NED similarity (граничные случаи, edge-cases, Unicode NFC, нормализация).
-    - `tests/test_ocr.py` — unit-тесты контрактов OCR, входной валидации, строгого отсутствия утечек GT в primary API, порядка чтения, инференса RapidOCR, пустого изображения, диагностического режима и runner CLI.
-    - `tests/test_ocr_stack.py` — исчерпывающие unit- и интеграционные тесты стека OCR: верификация моделей PP-OCRv6, проверка криптографических SHA256 хешей, интроспекция манифеста (configured, resolved, environment), поддержка RGB/Grayscale/Binary, аудит политики ресайза, детерминизм инференса и тайминги на CPU.
-    - `tests/test_preprocessing.py` — unit-тесты контрактов препроцессинга, P1–P5 примитивов, неизменяемости входа, детерминизма, отсутствия утечек GT, пайплайна, фабрики и аналитических базисов B0/B1/B2.
+  - `tests/test_ocr_metrics.py` — unit-тесты метрик CER, WER, Character-NED similarity (граничные случаи, edge-cases, Unicode NFC, нормализация).
+  - `tests/test_ocr.py` — unit-тесты контрактов OCR, входной валидации, строгого отсутствия утечек GT в primary API, порядка чтения, инференса RapidOCR, пустого изображения, диагностического режима и runner CLI.
+  - `tests/test_ocr_stack.py` — исчерпывающие unit- и интеграционные тесты стека OCR: верификация моделей PP-OCRv6, проверка криптографических SHA256 хешей, интроспекция манифеста (configured, resolved, environment), поддержка RGB/Grayscale/Binary, аудит политики ресайза, детерминизм инференса и тайминги на CPU.
+  - `tests/test_preprocessing.py` — unit-тесты контрактов препроцессинга, P1–P5 примитивов, неизменяемости входа, детерминизма, отсутствия утечек GT, пайплайна, фабрики и аналитических базисов B0/B1/B2.
+  - `tests/test_kie.py` — unit-тесты контрактов KIE, правил для полей, отсутствия утечки GT, provenance.
+  - `tests/test_kie_metrics.py` — unit-тесты пополевых и микро-метрик KIE, нормализаторов текста и сумм.
+  - `tests/test_kie_runner.py` — unit-тесты KIE runner и аудита последовательности выполнения.
+  - `tests/test_experiment_runner.py` — исчерпывающие unit- и интеграционные тесты единого экспериментального раннера: детерминизм сидов, семантика условий, защита тестового сплита, хеширование конфигурации, bootstrap 95% CI, GT isolation, failure accounting, схема артефактов.
 
 ---
 
@@ -131,7 +150,7 @@
     - Нормализация сумм `normalize_total_amount`: строго evaluator-side протокол (очистка от префиксов `$`, `RM`, `MYR`, нормализация пробелов, консервативная канонизация десятичного представления `10` $\to$ `10.00`, `10.5` $\to$ `10.50`). В raw evaluation действует строгое равенство `prediction == GT`. Данное преобразование категорически запрещено применять на этапе инференса OCR/KIE; политика нормализации заморожена (policy freeze) перед экспериментами.
 - **Preprocessing Pipeline & B0/B1/B2 Baselines:** Реализован (`src/preprocessing/`, примитивы P1–P5, `PreprocessingPipeline`, фабрика `get_preprocessor()`, раннер `run_b0_b1_b2_comparison()`, конфигурация `configs/preprocessing.yaml`, CLI `scripts/run_preprocessing_baseline.py`). Полная изоляция от Ground Truth. Текущие параметры зафиксированы как предварительные (**provisional**); статус оценки на реальных данных зафиксирован как `REAL-DATA PREPROCESSING BASELINE: PENDING`.
 - **KIE Extractor & Downstream Baseline:** Реализован (`src/kie/`, `RuleBasedKIEEngine`, `MockKIEEngine`, фабрика `get_kie_engine()`, примитивы `src/kie/rules/` для полей `company`, `date`, `address`, `total`, конфигурация `configs/kie.yaml`, CLI раннер `scripts/run_kie_baseline.py`). Строгий контракт без утечки эталона `extract(ocr_result, document_id) -> KIEResult` (аргумент `image` полностью исключен из API). Сохранение аудита происхождения токенов (`metadata["field_provenance"]`). Агрессивный фоллбэк «наибольшее число = total» по умолчанию строго отключен (`fallback_largest_amount: false`). В сквозном раннере принудительно зафиксирован порядок исполнения `ocr_inference` $\to$ `kie_inference` $\to$ `gt_loading` $\to$ `evaluation`. Статус оценки на реальных данных: `PENDING_REAL_DATA`.
-- **Experiment Runner:** Не реализован.
+- **Experiment Runner:** Реализован (`src/experiments/`, `UnifiedExperimentRunner`, CLI `scripts/run_experiment.py`, конфигурация `configs/experiment.yaml`). Единая детерминированная точка входа для проведения экспериментов устойчивости OCR и KIE ($B_0, B_1, B_2$). Строго соблюдает канонический порядок `degradation → preprocessing → OCR → KIE → GT loading → evaluation`. OCR и KIE полностью изолированы от Ground Truth. Severity 0 строго закреплен за контролем `D0_S0_P0` ($B_0$) и запрещен для деградаций. Реализована защита тестового сплита (`--allow-test` guard) и политика фикстур (`--allow-fixture` guard при отсутствии реальных данных SROIE). Детерминированный вывод независимых 32-битных сидов `derive_seed` на базе SHA-256. Расчет 95% доверительных интервалов bootstrap (1000 итераций) на уровне документов. Детальный учет сбоев (failure accounting) без тихого отбрасывания документов. Экспорт артефактов в `experiments/runs/<experiment_id>/` (`config.yaml`, `manifest.json`, `per_document.jsonl`, `summary.json`, `logs/run.log`). Проведен успешный контролируемый smoke-run на Development-выборке со статусом `PENDING_REAL_DATA`.
 - **Kaggle Automation Scripts:** Не реализованы.
 
 ---
@@ -141,14 +160,15 @@
   ```bash
   pytest -v --cov=src --cov-report=term-missing
   ```
-- Результат: **378 тестов пройдены успешно**, суммарное покрытие: **94%** (2036 statements, 128 missed):
-  - `src/core`: **100%** (368 statements, 0 missed)
-  - `src/datasets`: **100%** (159 statements, 0 missed)
-  - `src/degradation`: **98%** (241 statements, 5 missed)
+- Результат: **391 тест пройден успешно**, суммарное покрытие: **92%** (2510 statements, 195 missed):
+  - `src/core`: **100%** (372 statements, 0 missed)
+  - `src/datasets`: **100%** (163 statements, 0 missed)
+  - `src/degradation`: **98%** (250 statements, 5 missed)
   - `src/ocr`: **88%** (266 statements, 34 missed)
   - `src/kie`: **92%** (294 statements, 23 missed)
   - `src/evaluation`: **97%** (251 statements, 8 missed)
   - `src/preprocessing`: **86%** (338 statements, 46 missed)
+  - `src/experiments`: **83%** (474 statements, 80 missed)
 
 
 
