@@ -1,0 +1,117 @@
+version: 1.0.0
+calibration_date: '2026-09-26T16:26:35.391892'
+real_data_status: PENDING
+data_source: SYNTHETIC_FIXTURE
+degradations:
+  gaussian_blur:
+    severities:
+      0: {}
+      1:
+        sigma: 1.0
+      2:
+        sigma: 2.0
+      3:
+        sigma: 3.5
+      4:
+        sigma: 5.0
+    primary_metric: psnr_and_laplacian_ratio
+  motion_blur:
+    severities:
+      0: {}
+      1:
+        kernel_length: 5
+        angle: 30.0
+      2:
+        kernel_length: 9
+        angle: 30.0
+      3:
+        kernel_length: 15
+        angle: 30.0
+      4:
+        kernel_length: 21
+        angle: 30.0
+    primary_metric: psnr_and_laplacian_ratio
+  gaussian_noise:
+    severities:
+      0: {}
+      1:
+        mean: 0.0
+        std: 10.0
+      2:
+        mean: 0.0
+        std: 25.0
+      3:
+        mean: 0.0
+        std: 45.0
+      4:
+        mean: 0.0
+        std: 70.0
+    primary_metric: psnr_and_mae
+  jpeg_compression:
+    severities:
+      0: {}
+      1:
+        quality: 70
+      2:
+        quality: 40
+      3:
+        quality: 20
+      4:
+        quality: 8
+    primary_metric: psnr_and_ssim
+  downsampling:
+    severities:
+      0: {}
+      1:
+        scale_factor: 0.67
+      2:
+        scale_factor: 0.5
+      3:
+        scale_factor: 0.33
+      4:
+        scale_factor: 0.2
+    primary_metric: psnr_and_ssim
+  rotation:
+    severities:
+      0: {}
+      1:
+        angle: 2.0
+      2:
+        angle: 5.0
+      3:
+        angle: 10.0
+      4:
+        angle: 20.0
+    primary_metric: rotation_angle_degrees
+  perspective:
+    severities:
+      0: {}
+      1:
+        distortion_scale: 0.05
+      2:
+        distortion_scale: 0.1
+      3:
+        distortion_scale: 0.18
+      4:
+        distortion_scale: 0.28
+    primary_metric: distortion_scale
+  shadow:
+    severities:
+      0: {}
+      1:
+        opacity: 0.25
+        angle: 45.0
+        coverage: 0.4
+      2:
+        opacity: 0.45
+        angle: 45.0
+        coverage: 0.5
+      3:
+        opacity: 0.65
+        angle: 45.0
+        coverage: 0.6
+      4:
+        opacity: 0.85
+        angle: 45.0
+        coverage: 0.7
+    primary_metric: luminance_reduction_and_opacity

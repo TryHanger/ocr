@@ -6,6 +6,11 @@
 
 ## Completed
 
+- **TASK-005 — Degradation Engine + Severity Calibration**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно.
+  - *Результат:* Создан пакет `src/degradation/`, реализованы 8 детерминированных примитивов деградаций (D1: Gaussian Blur, D2: Motion Blur, D3: Gaussian Noise, D4: JPEG Compression, D5: Downsampling, D6: Rotation, D7: Perspective Distortion, D8: Shadow) на базе `BaseDegradationPrimitive`. Реализован строгий контракт severity 0 (bitwise identity pass-through, `image.copy()`, zero mutation) и неизменяемость входных данных. Создана абстракция `DegradationPipeline` и фабрика `get_degradation()`. Создан конфигурационный файл `configs/degradation.yaml` с кандидатными сетками и калибровочными параметрами. Реализован модуль калибровки `scripts/calibrate_degradations.py`, вычисляющий объективные метрики искажения (PSNR, SSIM, MAE, Laplacian ratio, Luminance drop), проверяющий монотонность физических параметров и метрик ($1 < 2 < 3 < 4$). Сгенерированы артефакты `experiments/calibration/` (`calibration_config.yaml`, `calibration_report.json`, визуальные образцы `samples/`). Статус калибровки на реальных данных зафиксирован как `REAL-DATA CALIBRATION: PENDING` (датасет локально отсутствует). Написан исчерпывающий набор unit-тестов `tests/test_degradation.py`, все 270 тестов проекта пройдены с общим покрытием 96% (100% core, 100% datasets, 98% degradation).
+
 - **TASK-004-R1 — Correct SROIE Adapter Raw-GT Semantics**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).

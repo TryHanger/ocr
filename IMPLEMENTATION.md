@@ -23,17 +23,23 @@
 ## 2. Структура каталогов
 - `configs/` — YAML-конфигурации:
   - `configs/sroie.yaml`: конфигурация датасета SROIE (канонические параметры, пути, ожидаемые объемы сплитов 626/347, ключи KIE, минимальные размеры).
+  - `configs/degradation.yaml`: конфигурация примитивов деградаций D1–D8, сетки параметров кандидатов, калиброванные параметры для severities 1..4 и сиды.
 - `data/` — для локального размещения датасетов и разметки (реальные данные в Git отсутствуют).
 - `docs/` — аналитическая, методологическая и аудиторская документация:
   - `docs/dataset_analysis.md`.
   - `docs/dataset_integrity.md`.
   - `docs/research_methodology.md`.
 - `experiments/audit/` — каталог для сохранения машиночитаемых отчетов аудита целостности данных (`sroie_integrity.json`).
+- `experiments/calibration/` — артефакты калибровки уровней severity 1..4:
+  - `experiments/calibration/calibration_config.yaml`: параметры severity 1..4 для каждого типа.
+  - `experiments/calibration/calibration_report.json`: полный машиночитаемый отчет с метриками (PSNR, SSIM, MAE, Laplacian, Luminance) и обоснованием выбора.
+  - `experiments/calibration/samples/`: визуальные образцы каждого уровня деградации (severities 0..4).
 - `experiments/runs/` — для сохранения метрик и логов (запуски пока не производились).
 - `experiments/figures/` — для сохранения графиков.
 - `kaggle/` — целевая директория для развертывания ядра Kaggle.
 - `scripts/` — директория для CLI утилит запуска:
   - `scripts/audit_sroie.py`: CLI-скрипт сквозного аудита целостности датасета SROIE по чек-листу C-01 – C-10.
+  - `scripts/calibrate_degradations.py`: CLI-скрипт калибровки параметров деградаций на validation-выборке и генерации калибровочных артефактов.
 - `src/` — корень исходного кода:
   - `src/core/` — **реализован**:
     - `src/core/schemas.py`: DTO и схемы данных (`BoundingBox`, `OCRToken`, `OCRResult`, `KIEResult`, `DocumentMetadata`, `DegradationSpec`, `PreprocessingSpec`, `ExperimentResult`, `OCRGroundTruth`, `KIEGroundTruth`) со строгой валидацией инвариантов и bidirectional JSON/dict сериализацией. `BoundingBox` разрешает координаты вне границ изображения и отрицательные координаты, сохраняя геометрию первоисточника без искажений.
@@ -42,7 +48,17 @@
   - `src/datasets/` — **реализован**:
     - `src/datasets/base.py`: реэкспорт абстрактного контракта `BaseDatasetAdapter`.
     - `src/datasets/sroie.py`: реализация `SROIEAdapter` для канонической структуры Kaggle SROIE v2 (`train/` и `test/` с поддиректориями `img/`, `box/`, `entities/`). Строго соблюдает **Raw Ground Truth Immutability**: координаты не обрезаются и не нормализуются (`source == adapter`), полигоны и derived `BoundingBox` сохраняются verbatim, валидация формата OCR требует ровно 8 координат, текст транскрипции не модифицируется (без lowercasing, date parsing, float conversion, удаления пунктуации). Детерминированная сортировка, canonical RGB uint8 изображения.
-  - `src/degradation/` (реализация алгоритмов отсутствует).
+  - `src/degradation/` — **реализован**:
+    - `src/degradation/base.py`: абстрактный класс `BaseDegradationPrimitive` со сквозной валидацией входного изображения, строгим соблюдением инварианта `severity = 0` (identity pass-through, `image.copy()`, zero mutation) и контролем типа uint8 и размерностей выхода.
+    - `src/degradation/gaussian_blur.py`: примитив D1 (Gaussian Blur, параметры `sigma`, `kernel_size`).
+    - `src/degradation/motion_blur.py`: примитив D2 (Motion Blur, параметры `kernel_length`, `angle`).
+    - `src/degradation/gaussian_noise.py`: примитив D3 (Gaussian Noise, параметры `mean`, `std`, детерминированный RNG по `spec.seed`).
+    - `src/degradation/jpeg_compression.py`: примитив D4 (In-memory JPEG Compression, параметр `quality` 1..100, сохранение цветового пространства RGB).
+    - `src/degradation/downsampling.py`: примитив D5 (Downsampling, параметры `scale_factor`/`factor`, `cv2.INTER_AREA` -> `cv2.INTER_LINEAR`, восстановление исходных габаритов).
+    - `src/degradation/rotation.py`: примитив D6 (Geometric Rotation, параметры `angle`, `border_mode`, сохранение габаритов кадра, заливка белым фоном).
+    - `src/degradation/perspective.py`: примитив D7 (Four-point Perspective, параметр `distortion_scale`, детерминированное смещение 4 углов по `spec.seed`).
+    - `src/degradation/shadow.py`: примитив D8 (Synthetic Shadow, параметры `opacity`, `angle`, `coverage`, сигмоидный градиент затенения).
+    - `src/degradation/pipeline.py`: класс композиции `DegradationPipeline` и фабрика `get_degradation()`.
   - `src/preprocessing/` (реализация алгоритмов отсутствует).
   - `src/ocr/` (реализация алгоритмов отсутствует).
   - `src/kie/` (реализация алгоритмов отсутствует).
@@ -57,6 +73,7 @@
   - `tests/test_contracts.py` — unit-тесты соблюдения абстрактных контрактов модулей (включая `BaseDatasetAdapter`).
   - `tests/test_dataset_sroie.py` — unit-тесты адаптера `SROIEAdapter` (детерминированность, неизменяемость GT, обработка ошибок, загрузка RGB, сохранение необрезанных координат, строгая проверка 8 координат).
   - `tests/test_audit_sroie.py` — unit-тесты проверок C-01 – C-10 скрипта аудита целостности датасета (включая strict/subset режимы и проверку метаданных отчета).
+  - `tests/test_degradation.py` — исчерпывающие unit-тесты для 8 примитивов деградаций (severity 0 identity, неизменяемость входа, uint8/shape contracts, детерминизм, стохастические сиды, монотонность, пайплайн, фабрика, калибровочные метрики и CLI).
 
 ---
 
@@ -77,7 +94,7 @@
 - **Research Protocol & Dataset Strategy:** Полностью зафиксированы и заморожены (**FROZEN**, ADR-008 – ADR-012).
 - **Dataset Adapter:** Реализован (`BaseDatasetAdapter`, `SROIEAdapter`) в полном соответствии с raw-GT семантикой TASK-004-R1 (сохранение геометрии без клиппинга, строгая проверка 8 координат, неизменяемость транскрипций).
 - **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10, поддержка аргументов `--mode` и `--strict`, очистка C-03 от порогов площади, явная фиксация режима фикстур в отчете).
-- **Degradation Engine:** Не реализован (контракт описан через `BaseDegradation` и `DegradationSpec`).
+- **Degradation Engine:** Реализован (`src/degradation/`, примитивы D1–D8, `DegradationPipeline`, `get_degradation()`, конфигурация `configs/degradation.yaml`, скрипт калибровки `scripts/calibrate_degradations.py`, калибровочные артефакты в `experiments/calibration/`). Полный детерминизм, строгий инвариант severity 0 identity, неизменяемость входов, сохранение размерностей и типа uint8.
 - **Preprocessing Pipeline:** Не реализован (контракт описан через `BasePreprocessor` и `PreprocessingSpec`).
 - **OCR Engine Abstraction & Models:** Не реализованы (контракт описан через `BaseOCREngine`, `OCRToken`, `OCRResult`).
 - **KIE Extractor:** Не реализован (контракт описан через `BaseKIEEngine` и `KIEResult`).
@@ -90,11 +107,13 @@
 ## 5. Тестирование и покрытие
 - Команда запуска тестов:
   ```bash
-  pytest --cov=src/core --cov=src/datasets --cov=scripts.audit_sroie --cov-report=term-missing
+  pytest --cov=src/core --cov=src/datasets --cov=src/degradation --cov=scripts.audit_sroie --cov=scripts.calibrate_degradations --cov-report=term-missing
   ```
-- Результат: **208 тестов пройдено успешно**, покрытие:
+- Результат: **270 тестов пройдено успешно**, покрытие:
   - `src/core`: **100%** (368 statements, 0 missed)
   - `src/datasets`: **100%** (163 statements, 0 missed)
+  - `src/degradation`: **98%** (248 statements, 6 missed)
   - `scripts/audit_sroie.py`: **93%** (302 statements, 22 missed)
-  - Суммарное покрытие: **97%** (837 statements, 22 missed).
+  - `scripts/calibrate_degradations.py`: **89%** (187 statements, 20 missed)
+  - Суммарное покрытие: **96%** (1335 statements, 48 missed).
 

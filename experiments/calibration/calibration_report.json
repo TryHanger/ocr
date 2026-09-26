@@ -1,0 +1,1151 @@
+{
+  "title": "Document Image Degradation Severity Calibration Report",
+  "timestamp": "2026-09-26T16:26:35.638019",
+  "real_data_calibration": "PENDING",
+  "data_source": "SYNTHETIC_FIXTURE",
+  "num_calibration_images": 1,
+  "notes": "Calibration conducted on synthetic fixture images for framework verification. Real SROIE validation data calibration remains PENDING until Kaggle dataset artifact is provided.",
+  "degradations": {
+    "gaussian_blur": {
+      "description": "D1 — Gaussian blur with configurable sigma and kernel size",
+      "primary_metric": "psnr_and_laplacian_ratio",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Increasing kernel sigma monotonically decreases high-frequency edge energy and PSNR while preserving general layout.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "sigma": 0.8
+          },
+          "mean_metrics": {
+            "psnr_db": 18.37,
+            "ssim": 0.84,
+            "mae": 11.45,
+            "laplacian_ratio": 0.04,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "sigma": 1.2
+          },
+          "mean_metrics": {
+            "psnr_db": 16.62,
+            "ssim": 0.75,
+            "mae": 14.65,
+            "laplacian_ratio": 0.01,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "sigma": 1.8
+          },
+          "mean_metrics": {
+            "psnr_db": 15.76,
+            "ssim": 0.67,
+            "mae": 16.75,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "sigma": 2.5
+          },
+          "mean_metrics": {
+            "psnr_db": 15.41,
+            "ssim": 0.64,
+            "mae": 17.85,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "sigma": 3.5
+          },
+          "mean_metrics": {
+            "psnr_db": 15.21,
+            "ssim": 0.62,
+            "mae": 18.68,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "sigma": 5.0
+          },
+          "mean_metrics": {
+            "psnr_db": 14.94,
+            "ssim": 0.6,
+            "mae": 19.62,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "sigma": 1.0
+          },
+          "mean_metrics": {
+            "psnr_db": 17.19,
+            "ssim": 0.78,
+            "mae": 13.46,
+            "laplacian_ratio": 0.01,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "sigma": 2.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.67,
+            "ssim": 0.66,
+            "mae": 17.07,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "sigma": 3.5
+          },
+          "mean_metrics": {
+            "psnr_db": 15.21,
+            "ssim": 0.62,
+            "mae": 18.68,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "4": {
+          "parameters": {
+            "sigma": 5.0
+          },
+          "mean_metrics": {
+            "psnr_db": 14.94,
+            "ssim": 0.6,
+            "mae": 19.62,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "motion_blur": {
+      "description": "D2 — Linear directional motion blur",
+      "primary_metric": "psnr_and_laplacian_ratio",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Increasing linear streak length simulates camera shake, progressively merging adjacent characters.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "kernel_length": 3,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 16.67,
+            "ssim": 0.77,
+            "mae": 12.86,
+            "laplacian_ratio": 0.25,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "kernel_length": 5,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 16.08,
+            "ssim": 0.73,
+            "mae": 14.57,
+            "laplacian_ratio": 0.11,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "kernel_length": 9,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.41,
+            "ssim": 0.65,
+            "mae": 16.58,
+            "laplacian_ratio": 0.09,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "kernel_length": 15,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.34,
+            "ssim": 0.62,
+            "mae": 17.51,
+            "laplacian_ratio": 0.03,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "kernel_length": 21,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.04,
+            "ssim": 0.56,
+            "mae": 18.69,
+            "laplacian_ratio": 0.03,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "kernel_length": 5,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 16.08,
+            "ssim": 0.73,
+            "mae": 14.57,
+            "laplacian_ratio": 0.11,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "kernel_length": 9,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.41,
+            "ssim": 0.65,
+            "mae": 16.58,
+            "laplacian_ratio": 0.09,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "kernel_length": 15,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.34,
+            "ssim": 0.62,
+            "mae": 17.51,
+            "laplacian_ratio": 0.03,
+            "luminance_drop": 0.0
+          }
+        },
+        "4": {
+          "parameters": {
+            "kernel_length": 21,
+            "angle": 30.0
+          },
+          "mean_metrics": {
+            "psnr_db": 15.04,
+            "ssim": 0.56,
+            "mae": 18.69,
+            "laplacian_ratio": 0.03,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "gaussian_noise": {
+      "description": "D3 — Additive Gaussian noise with zero mean",
+      "primary_metric": "psnr_and_mae",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Additive zero-mean noise with increasing std gradually masks text contrast and introduces sensor grain.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 5.0
+          },
+          "mean_metrics": {
+            "psnr_db": 34.07,
+            "ssim": 0.91,
+            "mae": 4.01,
+            "laplacian_ratio": 1.01,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 10.0
+          },
+          "mean_metrics": {
+            "psnr_db": 28.54,
+            "ssim": 0.76,
+            "mae": 7.73,
+            "laplacian_ratio": 1.02,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 20.0
+          },
+          "mean_metrics": {
+            "psnr_db": 23.69,
+            "ssim": 0.59,
+            "mae": 13.46,
+            "laplacian_ratio": 1.05,
+            "luminance_drop": 0.01
+          }
+        },
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 35.0
+          },
+          "mean_metrics": {
+            "psnr_db": 19.58,
+            "ssim": 0.47,
+            "mae": 20.41,
+            "laplacian_ratio": 1.12,
+            "luminance_drop": 0.03
+          }
+        },
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 50.0
+          },
+          "mean_metrics": {
+            "psnr_db": 16.76,
+            "ssim": 0.4,
+            "mae": 26.81,
+            "laplacian_ratio": 1.23,
+            "luminance_drop": 0.05
+          }
+        },
+        {
+          "parameters": {
+            "mean": 0.0,
+            "std": 70.0
+          },
+          "mean_metrics": {
+            "psnr_db": 14.0,
+            "ssim": 0.34,
+            "mae": 35.06,
+            "laplacian_ratio": 1.49,
+            "luminance_drop": 0.08
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "mean": 0.0,
+            "std": 10.0
+          },
+          "mean_metrics": {
+            "psnr_db": 28.54,
+            "ssim": 0.76,
+            "mae": 7.73,
+            "laplacian_ratio": 1.02,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "mean": 0.0,
+            "std": 25.0
+          },
+          "mean_metrics": {
+            "psnr_db": 22.1,
+            "ssim": 0.54,
+            "mae": 15.89,
+            "laplacian_ratio": 1.07,
+            "luminance_drop": 0.02
+          }
+        },
+        "3": {
+          "parameters": {
+            "mean": 0.0,
+            "std": 45.0
+          },
+          "mean_metrics": {
+            "psnr_db": 17.61,
+            "ssim": 0.42,
+            "mae": 24.71,
+            "laplacian_ratio": 1.19,
+            "luminance_drop": 0.05
+          }
+        },
+        "4": {
+          "parameters": {
+            "mean": 0.0,
+            "std": 70.0
+          },
+          "mean_metrics": {
+            "psnr_db": 14.0,
+            "ssim": 0.34,
+            "mae": 35.06,
+            "laplacian_ratio": 1.49,
+            "luminance_drop": 0.08
+          }
+        }
+      }
+    },
+    "jpeg_compression": {
+      "description": "D4 — In-memory JPEG compression/decompression",
+      "primary_metric": "psnr_and_ssim",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Decreasing quality factor (70->40->20->8) introduces standard DCT 8x8 block artifacts and ringing.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "quality": 80
+          },
+          "mean_metrics": {
+            "psnr_db": 35.86,
+            "ssim": 0.97,
+            "mae": 1.88,
+            "laplacian_ratio": 1.02,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "quality": 60
+          },
+          "mean_metrics": {
+            "psnr_db": 31.29,
+            "ssim": 0.94,
+            "mae": 3.17,
+            "laplacian_ratio": 1.02,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "quality": 40
+          },
+          "mean_metrics": {
+            "psnr_db": 28.5,
+            "ssim": 0.92,
+            "mae": 4.9,
+            "laplacian_ratio": 0.97,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "quality": 25
+          },
+          "mean_metrics": {
+            "psnr_db": 25.61,
+            "ssim": 0.91,
+            "mae": 5.44,
+            "laplacian_ratio": 0.87,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "quality": 15
+          },
+          "mean_metrics": {
+            "psnr_db": 23.23,
+            "ssim": 0.88,
+            "mae": 7.72,
+            "laplacian_ratio": 0.74,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "quality": 8
+          },
+          "mean_metrics": {
+            "psnr_db": 21.64,
+            "ssim": 0.86,
+            "mae": 9.03,
+            "laplacian_ratio": 0.69,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "quality": 70
+          },
+          "mean_metrics": {
+            "psnr_db": 32.94,
+            "ssim": 0.95,
+            "mae": 3.27,
+            "laplacian_ratio": 1.03,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "quality": 40
+          },
+          "mean_metrics": {
+            "psnr_db": 28.5,
+            "ssim": 0.92,
+            "mae": 4.9,
+            "laplacian_ratio": 0.97,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "quality": 20
+          },
+          "mean_metrics": {
+            "psnr_db": 24.36,
+            "ssim": 0.9,
+            "mae": 7.7,
+            "laplacian_ratio": 0.83,
+            "luminance_drop": 0.01
+          }
+        },
+        "4": {
+          "parameters": {
+            "quality": 8
+          },
+          "mean_metrics": {
+            "psnr_db": 21.64,
+            "ssim": 0.86,
+            "mae": 9.03,
+            "laplacian_ratio": 0.69,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "downsampling": {
+      "description": "D5 — Downsampling and bilinear restoration to original resolution",
+      "primary_metric": "psnr_and_ssim",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Progressive resolution reduction (0.67->0.50->0.33->0.20) tests robustness to low-DPI capture.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "scale_factor": 0.75
+          },
+          "mean_metrics": {
+            "psnr_db": 19.14,
+            "ssim": 0.88,
+            "mae": 9.92,
+            "laplacian_ratio": 0.1,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "scale_factor": 0.6
+          },
+          "mean_metrics": {
+            "psnr_db": 17.4,
+            "ssim": 0.8,
+            "mae": 12.49,
+            "laplacian_ratio": 0.04,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "scale_factor": 0.5
+          },
+          "mean_metrics": {
+            "psnr_db": 16.7,
+            "ssim": 0.76,
+            "mae": 13.87,
+            "laplacian_ratio": 0.02,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "scale_factor": 0.33
+          },
+          "mean_metrics": {
+            "psnr_db": 15.72,
+            "ssim": 0.68,
+            "mae": 16.36,
+            "laplacian_ratio": 0.01,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "scale_factor": 0.25
+          },
+          "mean_metrics": {
+            "psnr_db": 15.42,
+            "ssim": 0.64,
+            "mae": 17.35,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "scale_factor": 0.15
+          },
+          "mean_metrics": {
+            "psnr_db": 15.11,
+            "ssim": 0.59,
+            "mae": 18.84,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "scale_factor": 0.67
+          },
+          "mean_metrics": {
+            "psnr_db": 18.0,
+            "ssim": 0.83,
+            "mae": 11.57,
+            "laplacian_ratio": 0.06,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "scale_factor": 0.5
+          },
+          "mean_metrics": {
+            "psnr_db": 16.7,
+            "ssim": 0.76,
+            "mae": 13.87,
+            "laplacian_ratio": 0.02,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "scale_factor": 0.33
+          },
+          "mean_metrics": {
+            "psnr_db": 15.72,
+            "ssim": 0.68,
+            "mae": 16.36,
+            "laplacian_ratio": 0.01,
+            "luminance_drop": 0.0
+          }
+        },
+        "4": {
+          "parameters": {
+            "scale_factor": 0.2
+          },
+          "mean_metrics": {
+            "psnr_db": 15.3,
+            "ssim": 0.62,
+            "mae": 17.77,
+            "laplacian_ratio": 0.0,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "rotation": {
+      "description": "D6 — Geometric rotation around document center",
+      "primary_metric": "rotation_angle_degrees",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Small rotations (2->5->10->20 deg) test tilt tolerance without out-of-boundary document loss.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "angle": 1.5
+          },
+          "mean_metrics": {
+            "psnr_db": 14.62,
+            "ssim": 0.7,
+            "mae": 14.33,
+            "laplacian_ratio": 0.36,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "angle": 3.0
+          },
+          "mean_metrics": {
+            "psnr_db": 13.06,
+            "ssim": 0.58,
+            "mae": 18.48,
+            "laplacian_ratio": 0.42,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "angle": 6.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.91,
+            "ssim": 0.52,
+            "mae": 19.86,
+            "laplacian_ratio": 0.34,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "angle": 10.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.59,
+            "ssim": 0.48,
+            "mae": 21.19,
+            "laplacian_ratio": 0.37,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "angle": 15.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.36,
+            "ssim": 0.46,
+            "mae": 22.47,
+            "laplacian_ratio": 0.38,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "angle": 25.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.43,
+            "ssim": 0.45,
+            "mae": 22.61,
+            "laplacian_ratio": 0.41,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "angle": 2.0
+          },
+          "mean_metrics": {
+            "psnr_db": 14.18,
+            "ssim": 0.65,
+            "mae": 16.16,
+            "laplacian_ratio": 0.26,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "angle": 5.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.96,
+            "ssim": 0.53,
+            "mae": 19.52,
+            "laplacian_ratio": 0.35,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "angle": 10.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.59,
+            "ssim": 0.48,
+            "mae": 21.19,
+            "laplacian_ratio": 0.37,
+            "luminance_drop": 0.0
+          }
+        },
+        "4": {
+          "parameters": {
+            "angle": 20.0
+          },
+          "mean_metrics": {
+            "psnr_db": 12.33,
+            "ssim": 0.45,
+            "mae": 22.82,
+            "laplacian_ratio": 0.41,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "perspective": {
+      "description": "D7 — Four-point perspective transformation",
+      "primary_metric": "distortion_scale",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Corner displacement scales (0.05->0.10->0.18->0.28) simulate oblique handheld photography angles.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "distortion_scale": 0.03
+          },
+          "mean_metrics": {
+            "psnr_db": 14.07,
+            "ssim": 0.63,
+            "mae": 16.36,
+            "laplacian_ratio": 0.35,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "distortion_scale": 0.06
+          },
+          "mean_metrics": {
+            "psnr_db": 13.6,
+            "ssim": 0.58,
+            "mae": 18.48,
+            "laplacian_ratio": 0.33,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "distortion_scale": 0.1
+          },
+          "mean_metrics": {
+            "psnr_db": 12.98,
+            "ssim": 0.53,
+            "mae": 21.35,
+            "laplacian_ratio": 0.33,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "distortion_scale": 0.15
+          },
+          "mean_metrics": {
+            "psnr_db": 12.84,
+            "ssim": 0.51,
+            "mae": 22.89,
+            "laplacian_ratio": 0.32,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "distortion_scale": 0.22
+          },
+          "mean_metrics": {
+            "psnr_db": 12.89,
+            "ssim": 0.51,
+            "mae": 23.92,
+            "laplacian_ratio": 0.29,
+            "luminance_drop": 0.0
+          }
+        },
+        {
+          "parameters": {
+            "distortion_scale": 0.3
+          },
+          "mean_metrics": {
+            "psnr_db": 12.86,
+            "ssim": 0.52,
+            "mae": 25.14,
+            "laplacian_ratio": 0.26,
+            "luminance_drop": 0.0
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "distortion_scale": 0.05
+          },
+          "mean_metrics": {
+            "psnr_db": 13.74,
+            "ssim": 0.59,
+            "mae": 17.69,
+            "laplacian_ratio": 0.36,
+            "luminance_drop": 0.0
+          }
+        },
+        "2": {
+          "parameters": {
+            "distortion_scale": 0.1
+          },
+          "mean_metrics": {
+            "psnr_db": 12.98,
+            "ssim": 0.53,
+            "mae": 21.35,
+            "laplacian_ratio": 0.33,
+            "luminance_drop": 0.0
+          }
+        },
+        "3": {
+          "parameters": {
+            "distortion_scale": 0.18
+          },
+          "mean_metrics": {
+            "psnr_db": 12.85,
+            "ssim": 0.51,
+            "mae": 23.35,
+            "laplacian_ratio": 0.3,
+            "luminance_drop": 0.0
+          }
+        },
+        "4": {
+          "parameters": {
+            "distortion_scale": 0.28
+          },
+          "mean_metrics": {
+            "psnr_db": 12.96,
+            "ssim": 0.53,
+            "mae": 24.58,
+            "laplacian_ratio": 0.25,
+            "luminance_drop": 0.0
+          }
+        }
+      }
+    },
+    "shadow": {
+      "description": "D8 — Synthetic shadow illumination falloff",
+      "primary_metric": "luminance_reduction_and_opacity",
+      "monotonic_parameter": true,
+      "monotonic_metric": true,
+      "selection_rationale": "Luminance attenuation (0.25->0.45->0.65->0.85 opacity) across diagonal band models ambient shadows.",
+      "candidate_evaluations": [
+        {
+          "parameters": {
+            "opacity": 0.2,
+            "angle": 45.0,
+            "coverage": 0.4
+          },
+          "mean_metrics": {
+            "psnr_db": 19.77,
+            "ssim": 0.97,
+            "mae": 15.92,
+            "laplacian_ratio": 0.97,
+            "luminance_drop": 0.07
+          }
+        },
+        {
+          "parameters": {
+            "opacity": 0.35,
+            "angle": 45.0,
+            "coverage": 0.45
+          },
+          "mean_metrics": {
+            "psnr_db": 13.92,
+            "ssim": 0.92,
+            "mae": 33.98,
+            "laplacian_ratio": 0.89,
+            "luminance_drop": 0.15
+          }
+        },
+        {
+          "parameters": {
+            "opacity": 0.5,
+            "angle": 45.0,
+            "coverage": 0.5
+          },
+          "mean_metrics": {
+            "psnr_db": 9.94,
+            "ssim": 0.83,
+            "mae": 58.66,
+            "laplacian_ratio": 0.74,
+            "luminance_drop": 0.26
+          }
+        },
+        {
+          "parameters": {
+            "opacity": 0.65,
+            "angle": 45.0,
+            "coverage": 0.6
+          },
+          "mean_metrics": {
+            "psnr_db": 6.3,
+            "ssim": 0.66,
+            "mae": 101.66,
+            "laplacian_ratio": 0.45,
+            "luminance_drop": 0.44
+          }
+        },
+        {
+          "parameters": {
+            "opacity": 0.8,
+            "angle": 45.0,
+            "coverage": 0.7
+          },
+          "mean_metrics": {
+            "psnr_db": 3.64,
+            "ssim": 0.4,
+            "mae": 150.15,
+            "laplacian_ratio": 0.25,
+            "luminance_drop": 0.66
+          }
+        }
+      ],
+      "severities": {
+        "0": {
+          "parameters": {},
+          "mean_metrics": {
+            "psnr_db": 100.0,
+            "ssim": 1.0,
+            "mae": 0.0,
+            "laplacian_ratio": 1.0,
+            "luminance_drop": 0.0
+          }
+        },
+        "1": {
+          "parameters": {
+            "opacity": 0.25,
+            "angle": 45.0,
+            "coverage": 0.4
+          },
+          "mean_metrics": {
+            "psnr_db": 17.85,
+            "ssim": 0.96,
+            "mae": 19.72,
+            "laplacian_ratio": 0.96,
+            "luminance_drop": 0.09
+          }
+        },
+        "2": {
+          "parameters": {
+            "opacity": 0.45,
+            "angle": 45.0,
+            "coverage": 0.5
+          },
+          "mean_metrics": {
+            "psnr_db": 10.85,
+            "ssim": 0.86,
+            "mae": 52.84,
+            "laplacian_ratio": 0.76,
+            "luminance_drop": 0.23
+          }
+        },
+        "3": {
+          "parameters": {
+            "opacity": 0.65,
+            "angle": 45.0,
+            "coverage": 0.6
+          },
+          "mean_metrics": {
+            "psnr_db": 6.3,
+            "ssim": 0.66,
+            "mae": 101.66,
+            "laplacian_ratio": 0.45,
+            "luminance_drop": 0.44
+          }
+        },
+        "4": {
+          "parameters": {
+            "opacity": 0.85,
+            "angle": 45.0,
+            "coverage": 0.7
+          },
+          "mean_metrics": {
+            "psnr_db": 3.12,
+            "ssim": 0.34,
+            "mae": 159.52,
+            "laplacian_ratio": 0.23,
+            "luminance_drop": 0.7
+          }
+        }
+      }
+    }
+  }
+}

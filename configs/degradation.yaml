@@ -1,0 +1,141 @@
+# Configuration for Document Image Degradation Engine and Severity Calibration
+version: "1.0.0"
+default_seed: 42
+
+degradations:
+  gaussian_blur:
+    description: "D1 — Gaussian blur with configurable sigma and kernel size"
+    primary_metric: "psnr_and_laplacian_ratio"
+    candidates:
+      - { sigma: 0.8 }
+      - { sigma: 1.2 }
+      - { sigma: 1.8 }
+      - { sigma: 2.5 }
+      - { sigma: 3.5 }
+      - { sigma: 5.0 }
+    severities:
+      0: {}
+      1: { sigma: 1.0 }
+      2: { sigma: 2.0 }
+      3: { sigma: 3.5 }
+      4: { sigma: 5.0 }
+
+  motion_blur:
+    description: "D2 — Linear directional motion blur"
+    primary_metric: "psnr_and_laplacian_ratio"
+    candidates:
+      - { kernel_length: 3, angle: 30.0 }
+      - { kernel_length: 5, angle: 30.0 }
+      - { kernel_length: 9, angle: 30.0 }
+      - { kernel_length: 15, angle: 30.0 }
+      - { kernel_length: 21, angle: 30.0 }
+    severities:
+      0: {}
+      1: { kernel_length: 5, angle: 30.0 }
+      2: { kernel_length: 9, angle: 30.0 }
+      3: { kernel_length: 15, angle: 30.0 }
+      4: { kernel_length: 21, angle: 30.0 }
+
+  gaussian_noise:
+    description: "D3 — Additive Gaussian noise with zero mean"
+    primary_metric: "psnr_and_mae"
+    candidates:
+      - { mean: 0.0, std: 5.0 }
+      - { mean: 0.0, std: 10.0 }
+      - { mean: 0.0, std: 20.0 }
+      - { mean: 0.0, std: 35.0 }
+      - { mean: 0.0, std: 50.0 }
+      - { mean: 0.0, std: 70.0 }
+    severities:
+      0: {}
+      1: { mean: 0.0, std: 10.0 }
+      2: { mean: 0.0, std: 25.0 }
+      3: { mean: 0.0, std: 45.0 }
+      4: { mean: 0.0, std: 70.0 }
+
+  jpeg_compression:
+    description: "D4 — In-memory JPEG compression/decompression"
+    primary_metric: "psnr_and_ssim"
+    candidates:
+      - { quality: 80 }
+      - { quality: 60 }
+      - { quality: 40 }
+      - { quality: 25 }
+      - { quality: 15 }
+      - { quality: 8 }
+    severities:
+      0: {}
+      1: { quality: 70 }
+      2: { quality: 40 }
+      3: { quality: 20 }
+      4: { quality: 8 }
+
+  downsampling:
+    description: "D5 — Downsampling and bilinear restoration to original resolution"
+    primary_metric: "psnr_and_ssim"
+    candidates:
+      - { scale_factor: 0.75 }
+      - { scale_factor: 0.60 }
+      - { scale_factor: 0.50 }
+      - { scale_factor: 0.33 }
+      - { scale_factor: 0.25 }
+      - { scale_factor: 0.15 }
+    severities:
+      0: {}
+      1: { scale_factor: 0.67 }
+      2: { scale_factor: 0.50 }
+      3: { scale_factor: 0.33 }
+      4: { scale_factor: 0.20 }
+
+  rotation:
+    description: "D6 — Geometric rotation around document center"
+    primary_metric: "rotation_angle_degrees"
+    border_mode: "constant"
+    border_value: [255, 255, 255]
+    candidates:
+      - { angle: 1.5 }
+      - { angle: 3.0 }
+      - { angle: 6.0 }
+      - { angle: 10.0 }
+      - { angle: 15.0 }
+      - { angle: 25.0 }
+    severities:
+      0: {}
+      1: { angle: 2.0 }
+      2: { angle: 5.0 }
+      3: { angle: 10.0 }
+      4: { angle: 20.0 }
+
+  perspective:
+    description: "D7 — Four-point perspective transformation"
+    primary_metric: "distortion_scale"
+    border_value: [255, 255, 255]
+    candidates:
+      - { distortion_scale: 0.03 }
+      - { distortion_scale: 0.06 }
+      - { distortion_scale: 0.10 }
+      - { distortion_scale: 0.15 }
+      - { distortion_scale: 0.22 }
+      - { distortion_scale: 0.30 }
+    severities:
+      0: {}
+      1: { distortion_scale: 0.05 }
+      2: { distortion_scale: 0.10 }
+      3: { distortion_scale: 0.18 }
+      4: { distortion_scale: 0.28 }
+
+  shadow:
+    description: "D8 — Synthetic shadow illumination falloff"
+    primary_metric: "luminance_reduction_and_opacity"
+    candidates:
+      - { opacity: 0.20, angle: 45.0, coverage: 0.40 }
+      - { opacity: 0.35, angle: 45.0, coverage: 0.45 }
+      - { opacity: 0.50, angle: 45.0, coverage: 0.50 }
+      - { opacity: 0.65, angle: 45.0, coverage: 0.60 }
+      - { opacity: 0.80, angle: 45.0, coverage: 0.70 }
+    severities:
+      0: {}
+      1: { opacity: 0.25, angle: 45.0, coverage: 0.40 }
+      2: { opacity: 0.45, angle: 45.0, coverage: 0.50 }
+      3: { opacity: 0.65, angle: 45.0, coverage: 0.60 }
+      4: { opacity: 0.85, angle: 45.0, coverage: 0.70 }
