@@ -170,7 +170,7 @@ def run_ocr_baseline(
             "manifest_file": "ocr_stack_manifest.json" if manifest else None,
         },
         "ocr_stack": manifest if manifest else {},
-        "resize_policy": resize_cfg,
+        "resize_policy": manifest.get("resize_policy", resize_cfg) if manifest else resize_cfg,
         "summary_metrics": mean_metrics,
         "documents": results_list,
     }

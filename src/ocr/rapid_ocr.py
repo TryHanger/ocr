@@ -103,18 +103,36 @@ class RapidOCREngine(BaseOCREnginePrimitive):
         self._engine = RapidOCR(params=params)
 
     def _resolve_session_model(self, component: Any) -> Dict[str, Any]:
-        """Dynamically inspect an active RapidOCR component to extract actual model path and hash."""
+        """Dynamically inspect an active RapidOCR component to extract actual model path and hash.
+
+        NOTE: Model path resolution currently relies on a private RapidOCR wrapper attribute
+        (inner_session._model_path) and is therefore version-sensitive. If this attribute disappears
+        in a future version, resolution must fail loudly rather than silently continuing with an
+        incomplete manifest.
+        """
         if not hasattr(component, "session"):
-            return {"resolved": False, "error": "Component has no session attribute"}
+            raise RuntimeError(
+                f"RapidOCR component {component} has no 'session' attribute. "
+                "Model path resolution currently relies on a private RapidOCR wrapper attribute "
+                "and is therefore version-sensitive."
+            )
 
         ort_session = component.session
         inner_session = getattr(ort_session, "session", None)
         if inner_session is None:
-            return {"resolved": False, "error": "OrtInferSession has no inner InferenceSession"}
+            raise RuntimeError(
+                f"OrtInferSession in {component} has no inner 'session' (InferenceSession). "
+                "Model path resolution currently relies on a private RapidOCR wrapper attribute "
+                "and is therefore version-sensitive."
+            )
 
         model_path_str = getattr(inner_session, "_model_path", None)
         if not model_path_str:
-            return {"resolved": False, "error": "InferenceSession has no _model_path"}
+            raise RuntimeError(
+                f"ONNX Runtime InferenceSession for {component} has no '_model_path' attribute. "
+                "Model path resolution currently relies on a private RapidOCR wrapper attribute "
+                "and is therefore version-sensitive."
+            )
 
         p = Path(model_path_str)
         exists = p.exists()
@@ -162,6 +180,60 @@ class RapidOCREngine(BaseOCREnginePrimitive):
             "numpy_version": np.__version__,
         }
 
+        # Resolve resize policy from active runtime instance
+        cfg_global = getattr(getattr(self._engine, "cfg", None), "Global", None)
+        resolved_use_pre = getattr(
+            cfg_global,
+            "use_preprocess_img",
+            getattr(self._engine, "use_preprocess_img", self.use_preprocess_img),
+        )
+        resolved_max_side = getattr(self._engine, "max_side_len", self.max_side_len)
+        resolved_min_side = getattr(self._engine, "min_side_len", self.min_side_len)
+        resolved_det_limit = getattr(self._engine.text_det, "limit_side_len", self.det_limit_side_len)
+        resolved_det_type = getattr(self._engine.text_det, "limit_type", self.det_limit_type)
+
+        resize_configured = {
+            "use_preprocess_img": self.use_preprocess_img,
+            "max_side_len": self.max_side_len,
+            "min_side_len": self.min_side_len,
+            "det_limit_side_len": self.det_limit_side_len,
+            "det_limit_type": self.det_limit_type,
+            "interpolation": "cv2.INTER_LINEAR",
+        }
+
+        resize_resolved = {
+            "use_preprocess_img": resolved_use_pre,
+            "max_side_len": resolved_max_side,
+            "min_side_len": resolved_min_side,
+            "det_limit_side_len": resolved_det_limit,
+            "det_limit_type": resolved_det_type,
+            "interpolation": "cv2.INTER_LINEAR",
+            "order_of_application": [
+                "1. Global preprocess_img (bounds check [min_side_len, max_side_len], cv2.resize bilinear)",
+                "2. TextDet DetPreProcess (limit_side_len check, cv2.resize bilinear to multiple of 32)",
+            ],
+            "coordinate_restoration": "Detections mapped back to input image coordinate space",
+            "baseline_consistency_rule": (
+                "B0, B1 and B2 use the same OCR-side resize policy and the same OCR configuration. "
+                "The resulting resized dimensions may legitimately differ because the input images differ "
+                "after degradation/preprocessing."
+            ),
+        }
+
+        resize_verified = (
+            resolved_use_pre == resize_configured["use_preprocess_img"]
+            and resolved_max_side == resize_configured["max_side_len"]
+            and resolved_min_side == resize_configured["min_side_len"]
+            and resolved_det_limit == resize_configured["det_limit_side_len"]
+            and resolved_det_type == resize_configured["det_limit_type"]
+        )
+
+        resize_policy_block = {
+            "configured": resize_configured,
+            "resolved": resize_resolved,
+            "verified": resize_verified,
+        }
+
         configured = {
             "name": "RapidOCR",
             "version": self.model_version,
@@ -194,13 +266,7 @@ class RapidOCREngine(BaseOCREnginePrimitive):
             "runtime": {
                 "provider": "CPUExecutionProvider",
             },
-            "resize_policy": {
-                "enabled": self.use_preprocess_img,
-                "max_side_len": self.max_side_len,
-                "min_side_len": self.min_side_len,
-                "det_limit_side_len": self.det_limit_side_len,
-                "det_limit_type": self.det_limit_type,
-            },
+            "resize_policy": resize_configured,
         }
 
         def _format_resolved_model(model_key: str, info: Dict[str, Any]) -> Dict[str, Any]:
@@ -254,22 +320,14 @@ class RapidOCREngine(BaseOCREnginePrimitive):
                 "actual_providers": actual_providers,
                 "is_cpu_only": actual_providers == ["CPUExecutionProvider"],
             },
-            "resize_policy": {
-                "use_preprocess_img": getattr(self._engine, "use_preprocess_img", self.use_preprocess_img),
-                "max_side_len": getattr(self._engine, "max_side_len", self.max_side_len),
-                "min_side_len": getattr(self._engine, "min_side_len", self.min_side_len),
-                "det_limit_side_len": getattr(self._engine.text_det, "limit_side_len", self.det_limit_side_len),
-                "det_limit_type": getattr(self._engine.text_det, "limit_type", self.det_limit_type),
-                "interpolation": "cv2.INTER_LINEAR",
-                "component": "rapidocr.preprocess_img + text_det.preprocess",
-                "identical_across_baselines": True,
-            },
+            "resize_policy": resize_resolved,
         }
 
         return {
             "configured": configured,
             "resolved": resolved,
             "environment": environment,
+            "resize_policy": resize_policy_block,
         }
 
     def verify_model_stack(self) -> Tuple[bool, List[str]]:
@@ -314,6 +372,10 @@ class RapidOCREngine(BaseOCREnginePrimitive):
         providers = manifest["resolved"]["runtime"]["actual_providers"]
         if "CPUExecutionProvider" not in providers:
             errors.append(f"CPUExecutionProvider not found in ORT providers: {providers}")
+
+        # 5. Resize policy verification
+        if not manifest.get("resize_policy", {}).get("verified", False):
+            errors.append("Resize policy verification failed: resolved runtime parameters differ from configured.")
 
         return len(errors) == 0, errors
 

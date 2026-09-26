@@ -24,8 +24,8 @@ resize_policy:
   det_limit_side_len: 736
   det_limit_type: "min"
   interpolation: "cv2.INTER_LINEAR"
-  identical_across_baselines: true
-  note: "Native RapidOCR bilinear resize policy. Same image geometry and resolution pipeline applied across B0, B1, and B2."
+  same_ocr_configuration: true
+  note: "B0, B1 and B2 use the same OCR-side resize policy and the same OCR configuration. The resulting resized dimensions may legitimately differ because the input images differ after degradation/preprocessing."
 
 reading_order:
   strategy: "vertical_line_grouping_then_horizontal"

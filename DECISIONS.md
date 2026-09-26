@@ -231,29 +231,31 @@
      * Classifier: `ch_ppocr_mobile_v2.0_cls_mobile.onnx` (585,532 байт, SHA256: `e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c`).
   2. **Криптографическая фиксация моделей (Reproducibility Lock):**
      * Вместо доверия конфигурационным строкам реализована динамическая интроспекция активной сессии ONNX Runtime (`OrtInferSession.session._model_path`), вычисление фактического SHA256 хеша каждого файла на диске и сравнение с эталонными значениями.
+     * Model path resolution currently relies on a private RapidOCR wrapper attribute and is therefore version-sensitive. Если данный приватный атрибут пропадает или файл отсутствует, генерация манифеста аварийно завершается громкой ошибкой (fail loudly) без замалчивания.
      * При несовпадении хеша или отсутствии файла выполнение блокируется (`verify_model_stack()` возвращает ошибки).
   3. **Сохранение контракта BaseOCREngine и Strict GT Isolation:**
      * Контракт `recognize(image: np.ndarray, document_id: str) -> OCRResult` сохранен без изменений.
      * Никакие эталонные данные (GT boxes, transcripts, entities) не передаются в метод распознавания.
      * Внутрь OCR-движка не внедряются скрытые методы улучшения качества (денойз, CLAHE, дескев); они изолированы в модуле `src/preprocessing/`.
   4. **Экспорт машиночитаемого манифеста:**
-     * При запуске базового скрипта `scripts/run_ocr_baseline.py` формируется файл `experiments/runs/ocr_stack_manifest.json`, содержащий три четко разделенные секции:
+     * При запуске базового скрипта `scripts/run_ocr_baseline.py` формируется файл `experiments/runs/ocr_stack_manifest.json`, содержащий четко разделенные секции:
        * `configured`: заявленные в конфигурации параметры и модели;
        * `resolved`: фактические пути, размеры, SHA256 хеши и статус валидации файлов;
-       * `environment`: версии пакетов (`rapidocr`, `onnxruntime`, `opencv`, `numpy`), ОС и провайдер исполнения (`CPUExecutionProvider`).
+       * `environment`: версии пакетов (`rapidocr`, `onnxruntime`, `opencv`, `numpy`), ОС и провайдер исполнения (`CPUExecutionProvider`);
+       * `resize_policy`: блок с подразделами `configured`, `resolved` и флагом `verified: true`.
   5. **Аудит и фиксация политики ресайза (Resize Policy Lock):**
      * Эксплицитно задокументированы параметры ресайза RapidOCR:
        * глобальный ресайз: `max_side_len = 2000`, `min_side_len = 30` с округлением до кратных 32;
        * детекционный ресайз: `det_limit_side_len = 736`, `det_limit_type = 'min'`;
        * интерполяция: билинейная (`cv2.INTER_LINEAR`).
-     * Зафиксировано, что данная политика ресайза является идентичной для всех экспериментов $B_0$, $B_1$ и $B_2$, исключая искажения от скрытого масштабирования.
+     * **Интерпретация для B0/B1/B2:** B0, B1 and B2 use the same OCR-side resize policy and the same OCR configuration. The resulting resized dimensions may legitimately differ because the input images differ after degradation/preprocessing. Не утверждается, что физический результат ресайза обязан быть одинаковым.
   6. **Статус реальных данных:**
      * Статус реального SROIE бенчмарка сохранен как `REAL-DATA OCR BASELINE: PENDING`. Все метрики в отсутствие полного скачанного датасета помечены как синтетические проверочные.
 * **Context:** Для обеспечения научной достоверности дипломного исследования необходимо исключить любые скрытые факторы (изменение весов моделей, автоматические скрытые загрузки, различие параметров ресайза) при переходе к актуальной архитектуре PP-OCRv6.
 * **Alternatives:**
   * Остаться на PP-OCRv4 (устаревшая версия 2023 года с меньшей точностью распознавания плотного текста квитанций).
   * Использовать серверный PaddleOCR через REST API (нарушает автономность и воспроизводимость).
-* **Rationale:** PP-OCRv6 small обеспечивает превосходную скорость на CPU (~500–600 мс на чек), высокую точность и полную автономность при строгой верификации хешей весов.
-* **Consequences:** В проекте зафиксирован современный, криптографически верифицированный OCR-слой с идентичной геометрической обработкой для всех последующих стадий экспериментальной матрицы.
+* **Rationale:** PP-OCRv6 was selected as the primary OCR model family because it is the current verified model generation available through the selected RapidOCR/ONNX Runtime CPU stack while preserving the project's offline and reproducibility requirements. Заявления о превосходстве точности над PP-OCRv4 не делаются без проведения контролируемого эксперимента на полном датасете SROIE. Измеренная в смоук-тесте задержка на CPU является аппаратно-зависимой и не используется как научное утверждение о производительности.
+* **Consequences:** В проекте зафиксирован современный, криптографически верифицированный OCR-слой с идентичной конфигурацией ресайза для всех последующих стадий экспериментальной матрицы.
 
 

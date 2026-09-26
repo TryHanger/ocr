@@ -3,6 +3,7 @@
 import inspect
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 import cv2
 import numpy as np
 import pytest
@@ -22,13 +23,14 @@ def test_rapid_ocr_stack_verification():
 
 
 def test_rapid_ocr_manifest_structure():
-    """Verify that model manifest contains configured, resolved, and environment sections."""
+    """Verify that model manifest contains configured, resolved, environment, and resize_policy sections."""
     engine = RapidOCREngine()
     manifest = engine.get_model_manifest()
 
     assert "configured" in manifest
     assert "resolved" in manifest
     assert "environment" in manifest
+    assert "resize_policy" in manifest
 
     # Check configured
     assert manifest["configured"]["name"] == "RapidOCR"
@@ -54,6 +56,78 @@ def test_rapid_ocr_manifest_structure():
     assert "onnxruntime_version" in env
     assert "platform" in env
     assert "python_version" in env
+
+    # Check resize_policy
+    resize_sec = manifest["resize_policy"]
+    assert "configured" in resize_sec
+    assert "resolved" in resize_sec
+    assert resize_sec["verified"] is True
+    assert "baseline_consistency_rule" in resize_sec["resolved"]
+
+
+def test_private_model_path_disappearance_fails_loudly():
+    """Regression test: if _model_path disappears from ONNX Runtime session, resolution must fail loudly."""
+    engine = RapidOCREngine()
+    inner_sess = engine._engine.text_det.session.session
+    orig_path = getattr(inner_sess, "_model_path", None)
+
+    try:
+        setattr(inner_sess, "_model_path", None)
+        with pytest.raises(RuntimeError, match="relies on a private RapidOCR wrapper attribute"):
+            engine.get_model_manifest()
+    finally:
+        setattr(inner_sess, "_model_path", orig_path)
+
+
+def test_missing_model_file_stack_verification(monkeypatch):
+    """Verify that verify_model_stack reports error if resolved model file is missing on disk."""
+    engine = RapidOCREngine()
+    orig_manifest = engine.get_model_manifest()
+
+    def fake_manifest():
+        m = dict(orig_manifest)
+        m["resolved"] = dict(orig_manifest["resolved"])
+        m["resolved"]["detector"] = dict(orig_manifest["resolved"]["detector"])
+        m["resolved"]["detector"]["file_exists"] = False
+        m["resolved"]["detector"]["model_path"] = "C:/non_existent/model.onnx"
+        return m
+
+    monkeypatch.setattr(engine, "get_model_manifest", fake_manifest)
+    is_valid, errors = engine.verify_model_stack()
+    assert is_valid is False
+    assert any("Detector model file does not exist" in err for err in errors)
+
+
+def test_hash_mismatch_stack_verification(monkeypatch):
+    """Verify that verify_model_stack reports error if SHA256 does not match expected hash."""
+    engine = RapidOCREngine()
+    fake_expected = dict(EXPECTED_MODELS)
+    fake_expected["detector"] = dict(EXPECTED_MODELS["detector"])
+    fake_expected["detector"]["sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
+
+    monkeypatch.setattr("src.ocr.rapid_ocr.EXPECTED_MODELS", fake_expected)
+    is_valid, errors = engine.verify_model_stack()
+    assert is_valid is False
+    assert any("Detector SHA256 mismatch" in err for err in errors)
+
+
+def test_rapid_ocr_legacy_tuple_output_compatibility():
+    """Verify compatibility when RapidOCR returns legacy (results_list, elapse) tuple."""
+    engine = RapidOCREngine()
+    img = np.full((100, 200, 3), 255, dtype=np.uint8)
+
+    dummy_box = [[10.0, 10.0], [80.0, 10.0], [80.0, 30.0], [10.0, 30.0]]
+    legacy_return = ([ (dummy_box, "LEGACY_RECEIPT", 0.92) ], [0.01, 0.01, 0.01])
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(engine, "_engine", MagicMock(return_value=legacy_return))
+        result = engine.recognize(img, "doc_legacy")
+
+    assert isinstance(result, OCRResult)
+    assert len(result.tokens) == 1
+    assert result.tokens[0].text == "LEGACY_RECEIPT"
+    assert result.tokens[0].confidence == 0.92
+    assert result.full_text == "LEGACY_RECEIPT"
 
 
 def test_rapid_ocr_input_formats():
@@ -124,6 +198,32 @@ def test_rapid_ocr_resize_policy_exposure():
     assert engine.use_preprocess_img is True
 
 
+def test_b0_b1_b2_consistent_ocr_configuration():
+    """Verify that B0, B1, and B2 execute with identical OCR configuration even when input dimensions differ."""
+    engine = RapidOCREngine()
+
+    # B0: Original image
+    img_b0 = np.full((500, 300, 3), 255, dtype=np.uint8)
+    cv2.putText(img_b0, "B0 RECEIPT", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+
+    # B1: Degraded image (e.g. downsampled)
+    img_b1 = cv2.resize(img_b0, (150, 250), interpolation=cv2.INTER_AREA)
+
+    # B2: Preprocessed image (e.g. 2D grayscale resized)
+    img_b2 = cv2.cvtColor(cv2.resize(img_b0, (280, 480)), cv2.COLOR_BGR2GRAY)
+
+    res_b0 = engine.recognize(img_b0, "doc_b0")
+    res_b1 = engine.recognize(img_b1, "doc_b1")
+    res_b2 = engine.recognize(img_b2, "doc_b2")
+
+    assert isinstance(res_b0, OCRResult)
+    assert isinstance(res_b1, OCRResult)
+    assert isinstance(res_b2, OCRResult)
+    # The OCR configuration remains strictly identical across all runs
+    manifest = engine.get_model_manifest()
+    assert manifest["resize_policy"]["verified"] is True
+
+
 def test_rapid_ocr_classifier_toggle():
     """Verify behavior with use_cls=True and use_cls=False."""
     eng_cls = RapidOCREngine(use_cls=True)
@@ -159,7 +259,7 @@ def test_rapid_ocr_gt_isolation_audit():
 
 
 def test_rapid_ocr_performance_smoke():
-    """Run smoke test across 5 synthetic images and record timings."""
+    """Run smoke test across 5 synthetic images and record raw timings without performance claims."""
     engine = RapidOCREngine()
     timings = []
 
@@ -174,6 +274,8 @@ def test_rapid_ocr_performance_smoke():
     assert len(timings) == 5
     mean_time = sum(timings) / len(timings)
     assert mean_time > 0
+    # Note: Fixture CPU smoke test completed successfully; measured latency is environment-specific
+    # and is not used as a scientific performance claim.
 
 
 def test_manifest_export_baseline_runner(tmp_path: Path):
@@ -195,9 +297,11 @@ def test_manifest_export_baseline_runner(tmp_path: Path):
     assert "configured" in manifest
     assert "resolved" in manifest
     assert "environment" in manifest
+    assert "resize_policy" in manifest
     assert manifest["resolved"]["detector"]["sha256_verified"] is True
+    assert manifest["resize_policy"]["verified"] is True
 
     # Check report contents
     assert "ocr_stack" in report
     assert "resize_policy" in report
-    assert report["resize_policy"]["identical_across_baselines"] is True
+    assert report["resize_policy"]["verified"] is True
