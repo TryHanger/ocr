@@ -7,30 +7,35 @@
 ---
 
 ## 1. Репозиторий и инфраструктура
-- **Git-репозиторий:** инициализирован, настроена ветка `main`.
+- **Git-репозиторий:** инициализирован, ветка `main` синхронизирована с `origin https://github.com/TryHanger/ocr.git`.
 - **Игнорирование артефактов (`.gitignore`):** настроено исключение виртуальных окружений, кэшей Python/pytest, данных (`data/*`), весов моделей (`models/`, `weights/`), результатов прогонов (`experiments/runs/*`) и системных файлов.
 - **Управляющая документация:** созданы и согласованы файлы `CLAUDE.md`, `TASKS.md`, `IMPLEMENTATION.md`, `DECISIONS.md`.
-- **Удаленный репозиторий:** настроен origin `https://github.com/TryHanger/ocr.git`.
 
 ---
 
 ## 2. Структура каталогов
-Созданы следующие директории (с сохранением структуры через `.gitkeep`):
 - `configs/` — для YAML-конфигураций экспериментов (файлы конфигов пока не созданы).
 - `data/` — для локального размещения датасетов и разметки (данные отсутствуют).
 - `experiments/runs/` — для сохранения метрик и логов (запуски пока не производились).
 - `experiments/figures/` — для сохранения графиков.
-- `kaggle/` — целевая директория для развертывания ядра Kaggle (скрипты развертывания пока не созданы).
+- `kaggle/` — целевая директория для развертывания ядра Kaggle.
 - `scripts/` — директория для CLI утилит запуска.
 - `src/` — корень исходного кода:
-  - `src/degradation/` (реализация отсутствует).
-  - `src/preprocessing/` (реализация отсутствует).
-  - `src/ocr/` (реализация отсутствует).
-  - `src/kie/` (реализация отсутствует).
-  - `src/evaluation/` (реализация отсутствует).
+  - `src/core/` — **реализован**:
+    - `src/core/schemas.py`: DTO и схемы данных (`BoundingBox`, `OCRToken`, `OCRResult`, `KIEResult`, `DocumentMetadata`, `DegradationSpec`, `PreprocessingSpec`, `ExperimentResult`, `OCRGroundTruth`, `KIEGroundTruth`) со строгой валидацией инвариантов и bidirectional JSON/dict сериализацией.
+    - `src/core/seed.py`: глобальная фиксация random seed (Python random, NumPy, hash seed).
+    - `src/core/contracts.py`: абстрактные базовые классы/контракты будущих модулей (`BaseDegradation`, `BasePreprocessor`, `BaseOCREngine`, `BaseKIEEngine`, `BaseEvaluator`).
+  - `src/degradation/` (реализация алгоритмов отсутствует).
+  - `src/preprocessing/` (реализация алгоритмов отсутствует).
+  - `src/ocr/` (реализация алгоритмов отсутствует).
+  - `src/kie/` (реализация алгоритмов отсутствует).
+  - `src/evaluation/` (реализация алгоритмов отсутствует).
   - `src/visualization/` (реализация отсутствует).
 - `tests/` — тестовый набор:
   - `tests/test_environment.py` — смоук-тест базового окружения.
+  - `tests/test_schemas.py` — детальные unit-тесты схем данных, инвариантов, сериализации.
+  - `tests/test_seed.py` — unit-тесты детерминизма генераторов случайных чисел.
+  - `tests/test_contracts.py` — unit-тесты соблюдения абстрактных контрактов модулей.
 
 ---
 
@@ -41,22 +46,24 @@
   - `opencv-python>=4.8.0` (фактически установлен: 4.12.0)
   - `PyYAML>=6.0` (фактически установлен: 6.0.3)
   - `pytest>=7.0.0` (фактически установлен: 8.4.2)
+- В `pyproject.toml` для разработки подключен:
+  - `pytest-cov>=4.0.0` (фактически установлен: 7.1.0)
 - Тяжелые ML/OCR/KIE библиотеки (PyTorch, Transformers, PaddleOCR, Tesseract) в проект **не подключались**.
 
 ---
 
 ## 4. Состояние ML/OCR/KIE модулей
-- **Dataset Loader:** Не реализован.
-- **Degradation Engine:** Не реализован.
-- **Preprocessing Pipeline:** Не реализован.
-- **OCR Engine Abstraction & Models:** Не реализованы.
-- **KIE Extractor:** Не реализован.
-- **Evaluation & Metrics:** Не реализованы.
+- **Dataset Loader:** Не реализован (контракт описан через `DocumentMetadata`, `OCRGroundTruth`, `KIEGroundTruth`).
+- **Degradation Engine:** Не реализован (контракт описан через `BaseDegradation` и `DegradationSpec`).
+- **Preprocessing Pipeline:** Не реализован (контракт описан через `BasePreprocessor` и `PreprocessingSpec`).
+- **OCR Engine Abstraction & Models:** Не реализованы (контракт описан через `BaseOCREngine`, `OCRToken`, `OCRResult`).
+- **KIE Extractor:** Не реализован (контракт описан через `BaseKIEEngine` и `KIEResult`).
+- **Evaluation & Metrics:** Не реализованы (контракт описан через `BaseEvaluator` и `ExperimentResult`).
 - **Experiment Runner:** Не реализован.
 - **Kaggle Automation Scripts:** Не реализованы.
 
 ---
 
-## 5. Тестирование
-- Запущен смоук-тест `tests/test_environment.py` с помощью `pytest`.
-- Результат: 4 теста успешно пройдены (numpy, cv2, yaml, pytest).
+## 5. Тестирование и покрытие
+- Запуск тестов: `pytest --cov=src/core --cov-report=term-missing`
+- Результат: **161 тест пройден успешно**, покрытие кодовой базы `src/core/` составляет **100%** (358 statements, 0 missed).
