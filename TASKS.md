@@ -6,6 +6,11 @@
 
 ## Completed
 
+- **TASK-007 — Preprocessing Engine + B0/B1/B2 Baselines**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).
+  - *Результат:* Реализован модуль препроцессинга `src/preprocessing/` на базе абстрактного контракта `BasePreprocessor` и DTO `PreprocessingSpec`. Реализованы 5 независимых детерминированных примитивов: P1 (Grayscale: преобразование RGB/RGBA в 2D uint8), P2 (Denoising: median, bilateral, FastNlMeans), P3 (CLAHE: локальное выравнивание гистограммы для 2D grayscale или L-канала CIE LAB для RGB), P4 (Adaptive Binarization: Gaussian, Mean, Otsu со строгим выходом $\{0, 255\}$ uint8), P5 (Deskew: оценка угла текста по Canny + HoughLinesP, поворот с белыми полями и ограничением $\pm 15^\circ$, zero GT access). Реализована последовательная композиция `PreprocessingPipeline` и реестр-фабрика `get_preprocessor()`. Реализован раннер аналитических базисов `run_b0_b1_b2_comparison` для оценки веток $B_0$ (original $\to$ OCR), $B_1$ (degraded $\to$ OCR), $B_2$ (degraded $\to$ preprocessing $\to$ OCR) с полной изоляцией метрик от препроцессинга. Создан конфигурационный файл `configs/preprocessing.yaml` с кандидатными сетками и предварительными (provisional) параметрами. Реализован CLI-скрипт `scripts/run_preprocessing_baseline.py` с фиксацией отчета `experiments/runs/preprocessing_baseline_report.json` со статусом `real_data_preprocessing_baseline: "PENDING"`. Принят `ADR-014`. Написан исчерпывающий набор unit-тестов `tests/test_preprocessing.py` (31 тест). Все 337 тестов проекта пройдены с общим покрытием 94%.
+
 - **TASK-006 — OCR Engine Baseline + End-to-End OCR Evaluation**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно (READY FOR ARCHITECT REVIEW).

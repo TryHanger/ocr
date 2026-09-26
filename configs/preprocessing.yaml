@@ -1,0 +1,127 @@
+# Preprocessing Configuration & Method Specifications
+#
+# Status: PROVISIONAL (Initial parameter set based on classical engineering heuristics)
+# Final calibration on SROIE Validation split (N=126) is PENDING.
+# Do not treat these values as final scientific parameters.
+
+methods:
+  grayscale:
+    description: "Convert color image to single-channel 2D grayscale uint8."
+    input_channels: [1, 3, 4]
+    output_shape: "(H, W)"
+    output_dtype: "uint8"
+    parameters: {}
+
+  denoise:
+    description: "Noise reduction via median, bilateral, or FastNlMeans filters."
+    input_channels: [1, 3]
+    output_shape: "same as input"
+    output_dtype: "uint8"
+    provisional_parameters:
+      method: "median"
+      ksize: 3
+    candidate_parameters:
+      median:
+        ksize: [3, 5, 7]
+      bilateral:
+        d: [5, 9, 15]
+        sigma_color: [50.0, 75.0, 100.0]
+        sigma_space: [50.0, 75.0, 100.0]
+      fast_nl_means:
+        h: [5.0, 10.0, 15.0]
+        template_window_size: [7]
+        search_window_size: [21]
+
+  clahe:
+    description: "Contrast Limited Adaptive Histogram Equalization."
+    input_channels: [1, 3]
+    output_shape: "same as input"
+    output_dtype: "uint8"
+    provisional_parameters:
+      clip_limit: 2.0
+      tile_grid_size: [8, 8]
+    candidate_parameters:
+      clip_limit: [1.0, 2.0, 3.0, 4.0]
+      tile_grid_size:
+        - [4, 4]
+        - [8, 8]
+        - [16, 16]
+
+  binarization:
+    description: "Adaptive or global document thresholding into {0, 255}."
+    input_channels: [1, 3]
+    output_shape: "(H, W)"
+    output_dtype: "uint8"
+    output_values: [0, 255] # 0 = black foreground text, 255 = white background
+    provisional_parameters:
+      method: "gaussian"
+      block_size: 11
+      c: 2.0
+    candidate_parameters:
+      gaussian:
+        block_size: [7, 11, 15, 21, 31]
+        c: [1.0, 2.0, 5.0, 10.0]
+      mean:
+        block_size: [7, 11, 15, 21, 31]
+        c: [1.0, 2.0, 5.0, 10.0]
+      otsu: {}
+
+  deskew:
+    description: "Dominant angle estimation via Hough transform and rotation."
+    input_channels: [1, 3]
+    output_shape: "same as input"
+    output_dtype: "uint8"
+    border_fill: "white"
+    provisional_parameters:
+      max_angle: 15.0
+      min_lines: 3
+    candidate_parameters:
+      max_angle: [10.0, 15.0, 25.0]
+
+pipelines:
+  minimal_cleanup:
+    description: "Grayscale conversion and mild median denoising."
+    methods:
+      - "grayscale"
+      - "denoise"
+    parameters:
+      denoise:
+        method: "median"
+        ksize: 3
+
+  contrast_enhancement:
+    description: "Grayscale conversion followed by CLAHE contrast adaptation."
+    methods:
+      - "grayscale"
+      - "clahe"
+    parameters:
+      clahe:
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+
+  standard_receipt_enhancement:
+    description: "B2 candidate: Deskew, CLAHE contrast boost, and mild denoising."
+    methods:
+      - "deskew"
+      - "clahe"
+      - "denoise"
+    parameters:
+      deskew:
+        max_angle: 15.0
+      clahe:
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+      denoise:
+        method: "median"
+        ksize: 3
+
+  aggressive_binarization:
+    description: "Grayscale conversion and adaptive Gaussian binarization."
+    methods:
+      - "grayscale"
+      - "binarization"
+    parameters:
+      binarization:
+        method: "gaussian"
+        block_size: 15
+        c: 4.0
