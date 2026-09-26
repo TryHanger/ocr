@@ -80,13 +80,13 @@ class BaseKIEEngine(ABC):
 
     @abstractmethod
     def extract(
-        self, ocr_result: OCRResult, image: Optional[np.ndarray] = None
+        self, ocr_result: OCRResult, document_id: str
     ) -> KIEResult:
-        """Extract structured fields from OCR tokens and optional image visual cues.
+        """Extract structured fields from OCR tokens.
 
         Args:
             ocr_result: Standardized OCR tokens and full text.
-            image: Optional original or preprocessed image (for multimodal / Layout models).
+            document_id: Identifier of the document being processed.
 
         Returns:
             Standardized KIEResult containing extracted field mappings and confidences.

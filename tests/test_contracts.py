@@ -87,14 +87,14 @@ def test_concrete_ocr_engine_implementation():
 def test_concrete_kie_engine_implementation():
     class DummyKIE(BaseKIEEngine):
         def extract(
-            self, ocr_result: OCRResult, image: Optional[np.ndarray] = None
+            self, ocr_result: OCRResult, document_id: str
         ) -> KIEResult:
-            super().extract(ocr_result, image)
-            return KIEResult(document_id=ocr_result.document_id, fields={"total": "100"})
+            super().extract(ocr_result, document_id)
+            return KIEResult(document_id=document_id, fields={"total": "100"})
 
     kie = DummyKIE()
     ocr_res = OCRResult(document_id="doc_test", full_text="TOTAL 100", tokens=[])
-    res = kie.extract(ocr_res)
+    res = kie.extract(ocr_res, "doc_test")
     assert res.document_id == "doc_test"
     assert res.fields["total"] == "100"
 

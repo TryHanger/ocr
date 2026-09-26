@@ -123,9 +123,14 @@
 - **Dataset Integrity Audit:** Реализован (`scripts/audit_sroie.py`, проверки C-01 – C-10, поддержка аргументов `--mode` и `--strict`, очистка C-03 от порогов площади, явная фиксация режима фикстур в отчете).
 - **Degradation Engine:** Реализован (`src/degradation/`, примитивы D1–D8, `DegradationPipeline`, `get_degradation()`, конфигурация `configs/degradation.yaml`, скрипт калибровки `scripts/calibrate_degradations.py`, калибровочные артефакты в `experiments/calibration/`). Полный детерминизм, строгий инвариант severity 0 identity, неизменяемость входов, сохранение размерностей и типа uint8. Текущие параметры зафиксированы как стартовый предварительный набор (**provisional / fixture-based**); окончательная исследовательская калибровка на валидационном сплите SROIE ($N=126$) ожидает появления датасета (`real_data_calibration: PENDING`, `calibration_dataset: synthetic_fixture`, `final_calibration_completed: false`).
 - **OCR Engine Baseline & Reproducibility Lock:** Актуализирован и зафиксирован на стек RapidOCR (`rapidocr==3.9.2`) + ONNX Runtime (`onnxruntime==1.30.0`) + PP-OCRv6 small (детекция и распознавание) и мобильный классификатор ориентации (TASK-008, ADR-015). Реализована динамическая интроспекция активной сессии ONNX Runtime с криптографической проверкой SHA256 хешей файлов весов (`verify_model_stack()`). Эксплицитно задокументирована зависимость от приватного атрибута `_model_path` обертки RapidOCR с гарантией loud failure при его отсутствии. Автоматически экспортируется манифест `experiments/runs/ocr_stack_manifest.json` с четким разделением на секции `configured`, `resolved`, `environment` и структурированный блок `resize_policy` (`configured`, `resolved`, `verified: true`). Зафиксировано строгое методологическое правило ресайза: базисы B0, B1 и B2 используют одну и ту же политику и конфигурацию OCR-ресайза, а физические результирующие размеры могут легитимно различаться из-за различий входных изображений. Полная изоляция от Ground Truth в основном контракте `recognize(image, document_id) -> OCRResult`, отдельный диагностический метод `diagnostic_gt_region_recognition(image, document_id, gt_boxes)`. Детерминированная эвристика порядка чтения (линейная кластеризация по $Y$ с настраиваемым допуском `line_tolerance_factor=0.5` и сортировка слева направо по $X$), сохранение исходных полигонов в `metadata["raw_quadrilaterals"]` и derived `BoundingBox` без клиппинга. Статус оценки на реальном датасете: `REAL-DATA OCR BASELINE: PENDING` (запуск на фикстурах для валидации пайплайна).
-- **Evaluation & Metrics:** Реализованы метрики OCR (`src/evaluation/ocr_metrics.py`): CER, WER и строго определенный **Character-NED similarity** ($1.0 - \frac{\text{edit\_distance}}{\max(\text{len}(pred), \text{len}(gt), 1)}$) в диапазоне $[0.0, 1.0]$. Симметричная нормализация текста OCR (Unicode NFC, схлопывание пробелов, удаление управляющих символов), сохранение 4 представлений текста (`raw_pred`, `raw_gt`, `norm_pred`, `norm_gt`). KIE evaluator и метрики KIE еще не реализованы.
+- **Evaluation & Metrics:** Реализованы метрики OCR и KIE (`src/evaluation/`):
+  - *OCR:* CER, WER и строго определенный **Character-NED similarity** ($1.0 - \frac{\text{edit\_distance}}{\max(\text{len}(pred), \text{len}(gt), 1)}$) в диапазоне $[0.0, 1.0]$. Симметричная нормализация текста OCR (Unicode NFC, схлопывание пробелов, удаление управляющих символов), сохранение 4 представлений текста (`raw_pred`, `raw_gt`, `norm_pred`, `norm_gt`).
+  - *KIE:* Реализована двухуровневая система оценки (`src/evaluation/kie_metrics.py`, `KIEEvaluator`):
+    - `analytical_metrics`: пополевые Precision, Recall, F1 (как `raw`, так и `normalized`), Macro Precision, Recall, F1 по 4 полям, независимые показатели `raw_doc_em` и `normalized_doc_em`.
+    - `sroie_official_compatible`: микро-метрики Precision, Recall и Hmean (F1) на уровне сущностей согласно протоколу ICDAR SROIE Task 3.
+    - Нормализация текста `normalize_kie_text` (NFC, lowercase, схлопывание пробелов, удаление граничной пунктуации с сохранением внутренней) и нормализация сумм `normalize_total_amount` (удаление валютных префиксов `$`, `RM`, `MYR` с сохранением десятичных дробей).
 - **Preprocessing Pipeline & B0/B1/B2 Baselines:** Реализован (`src/preprocessing/`, примитивы P1–P5, `PreprocessingPipeline`, фабрика `get_preprocessor()`, раннер `run_b0_b1_b2_comparison()`, конфигурация `configs/preprocessing.yaml`, CLI `scripts/run_preprocessing_baseline.py`). Полная изоляция от Ground Truth. Текущие параметры зафиксированы как предварительные (**provisional**); статус оценки на реальных данных зафиксирован как `REAL-DATA PREPROCESSING BASELINE: PENDING`.
-- **KIE Extractor:** Не реализован (контракт описан через `BaseKIEEngine` и `KIEResult`).
+- **KIE Extractor & Downstream Baseline:** Реализован (`src/kie/`, `RuleBasedKIEEngine`, `MockKIEEngine`, фабрика `get_kie_engine()`, примитивы `src/kie/rules/` для полей `company`, `date`, `address`, `total`, конфигурация `configs/kie.yaml`, CLI раннер `scripts/run_kie_baseline.py`). Строгий контракт без утечки эталона `extract(ocr_result, document_id) -> KIEResult` (аргумент `image` полностью исключен из API). Сохранение аудита происхождения токенов (`metadata["field_provenance"]`). Агрессивный фоллбэк «наибольшее число = total» по умолчанию строго отключен (`fallback_largest_amount: false`). В сквозном раннере принудительно зафиксирован порядок исполнения `ocr_inference` $\to$ `kie_inference` $\to$ `gt_loading` $\to$ `evaluation`. Статус оценки на реальных данных: `PENDING_REAL_DATA`.
 - **Experiment Runner:** Не реализован.
 - **Kaggle Automation Scripts:** Не реализованы.
 
@@ -136,26 +141,14 @@
   ```bash
   pytest -v --cov=src --cov-report=term-missing
   ```
-- Результат: **351 тест пройден успешно**, суммарное покрытие: **94%** (1531 statements, 86 missed):
+- Результат: **378 тестов пройдены успешно**, суммарное покрытие: **94%** (2036 statements, 128 missed):
   - `src/core`: **100%** (368 statements, 0 missed)
   - `src/datasets`: **100%** (159 statements, 0 missed)
   - `src/degradation`: **98%** (241 statements, 5 missed)
-  - `src/ocr`: **82%** (162 statements, 29 missed)
-  - `src/evaluation`: **100%** (77 statements, 0 missed)
+  - `src/ocr`: **88%** (266 statements, 34 missed)
+  - `src/kie`: **92%** (294 statements, 23 missed)
+  - `src/evaluation`: **97%** (251 statements, 8 missed)
   - `src/preprocessing`: **86%** (338 statements, 46 missed)
-    - `src/preprocessing/base.py`: **84%**
-    - `src/preprocessing/baseline.py`: **100%**
-    - `src/preprocessing/binarization.py`: **87%**
-    - `src/preprocessing/clahe.py`: **74%**
-    - `src/preprocessing/denoise.py`: **84%**
-    - `src/preprocessing/deskew.py`: **85%**
-    - `src/preprocessing/grayscale.py`: **89%**
-    - `src/preprocessing/pipeline.py`: **88%**
-    - `src/preprocessing/__init__.py`: **100%**
-  - `scripts/audit_sroie.py`: **93%** (302 statements, 22 missed)
-  - `scripts/calibrate_degradations.py`: **89%** (190 statements, 20 missed)
-  - `scripts/run_ocr_baseline.py`: **91%** (82 statements, 7 missed)
-  - `scripts/run_preprocessing_baseline.py`: **92%** (85 statements, 7 missed)
 
 
 

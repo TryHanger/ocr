@@ -4,7 +4,20 @@
 
 *(Нет активных задач)*
 
-## Completed
+- **TASK-009 — KIE Baseline Engine + Evaluation**
+  - *Дата завершения:* 2026-09-26 (с учетом уточнений TASK-009-R1)
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Реализован детерминированный правилосодержащий baseline для downstream-задачи извлечения ключевой информации (Key Information Extraction, KIE) поверх ранее зафиксированного OCR-стека (RapidOCR + ONNX Runtime + PP-OCRv6 small):
+    1. *Контракт и Zero GT Leakage:* Обновлен абстрактный контракт `BaseKIEEngine` в `src/core/contracts.py`: сигнатура строго зафиксирована как `extract(self, ocr_result: OCRResult, document_id: str) -> KIEResult`. Аргумент `image` полностью исключен из production API. На вход KIE передается исключительно DTO `OCRResult` и идентификатор документа; никакие эталонные данные (GT boxes, transcripts, entity labels, dataset adapter) не передаются и недоступны движку.
+    2. *Модуль `src/kie/`:* Создана модульная архитектура правил в `src/kie/rules/` (`company`, `date`, `address`, `total`) с генерацией кандидатов `FieldCandidate`, вычислением нормализованных уровней уверенности `[0.0, 1.0]` и сохранением аудиторского следа происхождения токенов (`metadata["field_provenance"]`). Реализован `RuleBasedKIEEngine`, детерминированный `MockKIEEngine` и фабрика `get_kie_engine()`. Эвристики ориентированы на структуру квитанций SROIE и задокументированы как предварительные (provisional) без оверфиттинга под конкретные документы.
+    3. *Политика агрессивного фоллбэка:* Эвристика «наибольшее число = total» по умолчанию строго отключена (`fallback_largest_amount: false`). При явной активации в конфигурации кандидату назначается штраф к уверенности (`fallback_penalty: 0.5`).
+    4. *Двухуровневая система метрик (`src/evaluation/kie_metrics.py`, `KIEEvaluator`):* Структурно разделены:
+       - `analytical_metrics`: пополевые Precision, Recall, F1 (как сырые `raw`, так и нормализованные `normalized`), Macro Precision, Recall, F1 по 4 полям, независимые показатели `raw_doc_em` и `normalized_doc_em`.
+       - `sroie_official_compatible`: микро-метрики Precision, Recall и Hmean (F1) на уровне сущностей согласно официальному протоколу ICDAR SROIE Task 3.
+       - Нормализаторы: `normalize_kie_text` (NFC, lowercase, схлопывание пробелов, удаление граничной пунктуации с сохранением внутренней) и `normalize_total_amount` (удаление валютных префиксов `$`, `RM`, `MYR` с сохранением десятичных дробей).
+    5. *Сквозной раннер и аудит исполнения:* Реализован CLI-раннер `scripts/run_kie_baseline.py` с принудительной последовательностью фаз: `ocr_inference` $\to$ `kie_inference` $\to$ `gt_loading` $\to$ `evaluation`. Результаты сохраняются в `experiments/runs/kie_baseline_report.json` со статусом `PENDING_REAL_DATA`.
+    6. *Конфигурация и документация:* Создан конфигурационный файл `configs/kie.yaml`, принят `ADR-016` в `DECISIONS.md`, обновлены `IMPLEMENTATION.md` и управляющая документация.
+    7. *Тестирование:* Добавлены исчерпывающие тестовые наборы `tests/test_kie.py`, `tests/test_kie_metrics.py`, `tests/test_kie_runner.py`. Все 378 тестов проекта успешно пройдены со 100% успехом и суммарным покрытием 94%.
 
 - **TASK-008 — OCR Stack Refresh & Reproducibility Lock**
   - *Дата завершения:* 2026-09-26 (исправления TASK-008-R1 приняты)
