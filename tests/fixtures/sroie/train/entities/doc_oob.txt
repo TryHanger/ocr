@@ -1,0 +1,6 @@
+{
+  "company": "OUT OF BOUNDS STORE",
+  "date": "10/10/2018",
+  "address": "SOME CITY",
+  "total": "12.00"
+}

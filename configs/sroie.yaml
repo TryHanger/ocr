@@ -1,0 +1,20 @@
+# SROIE Dataset Configuration
+dataset:
+  name: "sroie-datasetv2"
+  source: "Kaggle: urbikn/sroie-datasetv2"
+  root_dir: "data/SROIE2019"
+  expected_train_count: 626
+  expected_test_count: 347
+  required_kie_keys:
+    - "company"
+    - "date"
+    - "address"
+    - "total"
+  min_dimension_pixels: 100
+  supported_image_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".bmp"
+    - ".tif"
+    - ".tiff"

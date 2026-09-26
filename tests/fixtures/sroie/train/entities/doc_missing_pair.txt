@@ -1,0 +1,6 @@
+{
+  "company": "ORPHAN SHOP",
+  "date": "03/03/2020",
+  "address": "ORPHAN CITY",
+  "total": "3.00"
+}

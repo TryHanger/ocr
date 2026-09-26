@@ -8,6 +8,7 @@ import numpy as np
 
 from src.core.schemas import (
     DegradationSpec,
+    DocumentMetadata,
     ExperimentResult,
     KIEGroundTruth,
     KIEResult,
@@ -125,3 +126,68 @@ class BaseEvaluator(ABC):
             Dictionary mapping metric names to computed numerical values.
         """
         pass
+
+
+class BaseDatasetAdapter(ABC):
+    """Abstract contract for document dataset access."""
+
+    @abstractmethod
+    def list_document_ids(self, split: str) -> list[str]:
+        """List document IDs for a given split in deterministic order.
+
+        Args:
+            split: Dataset split identifier ('train', 'test', etc.).
+
+        Returns:
+            List of unique document IDs without file extensions.
+        """
+        pass
+
+    @abstractmethod
+    def get_metadata(self, document_id: str) -> DocumentMetadata:
+        """Get standardized metadata for a document.
+
+        Args:
+            document_id: Unique document identifier.
+
+        Returns:
+            Standardized DocumentMetadata instance.
+        """
+        pass
+
+    @abstractmethod
+    def get_image(self, document_id: str) -> np.ndarray:
+        """Load document image in canonical representation (RGB uint8 ndarray).
+
+        Args:
+            document_id: Unique document identifier.
+
+        Returns:
+            Image as numpy ndarray of shape (H, W, 3) and dtype uint8.
+        """
+        pass
+
+    @abstractmethod
+    def get_ocr_ground_truth(self, document_id: str) -> OCRGroundTruth:
+        """Load immutable OCR ground truth for a document.
+
+        Args:
+            document_id: Unique document identifier.
+
+        Returns:
+            Standardized OCRGroundTruth instance with tokens and bounding boxes.
+        """
+        pass
+
+    @abstractmethod
+    def get_kie_ground_truth(self, document_id: str) -> KIEGroundTruth:
+        """Load immutable KIE ground truth for a document.
+
+        Args:
+            document_id: Unique document identifier.
+
+        Returns:
+            Standardized KIEGroundTruth instance with raw entity field values.
+        """
+        pass
+

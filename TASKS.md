@@ -6,6 +6,12 @@
 
 ## Completed
 
+- **TASK-004 — SROIE Dataset Adapter + Dataset Integrity Audit**
+  - *Дата завершения:* 2026-09-26
+  - *Статус:* Завершена успешно.
+  - *Результат:* Создан пакет `src/datasets/`, реализованы `BaseDatasetAdapter` и `SROIEAdapter` (`src/datasets/sroie.py`) с полной поддержкой канонической структуры Kaggle SROIE v2 (`train/` и `test/` с подкаталогами `img/`, `box/`, `entities/`). Реализован строгий принцип Raw Ground Truth Immutability (нет lowercasing, date parsing, float conversion, удаления пунктуации). Создан CLI-скрипт `scripts/audit_sroie.py` для валидации чек-листа C-01 – C-10 из `docs/dataset_integrity.md`, формирующий машиночитаемый JSON-отчет (`experiments/audit/sroie_integrity.json`) и консольную сводку с корректным exit code. Созданы синтетические фикстуры `tests/fixtures/sroie/` (валидные, с дефектами OCR/KIE, непарными файлами, out-of-bounds координатами) и чистые фикстуры `tests/fixtures/sroie_valid/`. Добавлены unit-тесты адаптера и аудита, все 206 тестов проекта пройдены со 100% покрытием `src/core` и `src/datasets` (97% суммарно).
+
+
 - **TASK-003-R2 — Research Freeze**
   - *Дата завершения:* 2026-09-26
   - *Статус:* Завершена успешно. Исследовательский протокол **FROZEN**.

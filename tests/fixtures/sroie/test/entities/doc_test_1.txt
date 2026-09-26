@@ -1,0 +1,6 @@
+{
+  "company": "TEST STORE A",
+  "date": "12/12/2019",
+  "address": "TEST ADDRESS A",
+  "total": "99.99"
+}

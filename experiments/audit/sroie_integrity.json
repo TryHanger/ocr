@@ -1,0 +1,102 @@
+{
+  "dataset": "sroie-datasetv2",
+  "train_count": 5,
+  "test_count": 2,
+  "expected_train_count": 626,
+  "expected_test_count": 347,
+  "summary": {
+    "train_images": 6,
+    "train_ocr": 5,
+    "train_kie": 6,
+    "test_images": 2,
+    "test_ocr": 2,
+    "test_kie": 2,
+    "paired_train_documents": 5,
+    "paired_test_documents": 2
+  },
+  "checks": {
+    "C-01": {
+      "name": "image_file_exists",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-02": {
+      "name": "raster_readability",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-03": {
+      "name": "geometric_dimensions",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-04": {
+      "name": "ocr_file_exists",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-05": {
+      "name": "ocr_polygons_valid",
+      "passed": false,
+      "status": "FAILED"
+    },
+    "C-06": {
+      "name": "bbox_geometry_bounds",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-07": {
+      "name": "kie_file_exists_and_valid_json",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-08": {
+      "name": "kie_required_keys_and_string_values",
+      "passed": false,
+      "status": "FAILED"
+    },
+    "C-09": {
+      "name": "id_uniqueness_and_split_isolation",
+      "passed": true,
+      "status": "PASSED"
+    },
+    "C-10": {
+      "name": "cross_file_triplet_consistency",
+      "passed": false,
+      "status": "FAILED"
+    }
+  },
+  "split_discrepancies": {
+    "train": {
+      "missing_images": [],
+      "missing_ocr": [
+        "doc_missing_pair"
+      ],
+      "missing_kie": [],
+      "extra_images": [
+        "doc_missing_pair"
+      ],
+      "extra_ocr": [],
+      "extra_kie": []
+    },
+    "test": {
+      "missing_images": [],
+      "missing_ocr": [],
+      "missing_kie": [],
+      "extra_images": [],
+      "extra_ocr": [],
+      "extra_kie": []
+    }
+  },
+  "errors": [
+    "[C-10] Split 'train' missing OCR annotations for IDs: ['doc_missing_pair']",
+    "[C-05] Document 'doc_bad_ocr' line 1: expected 8 coords + text, got 4 parts: '10,20,30,MALFORMED_LINE_TOO_FEW_COORDS'",
+    "[C-08] Document 'doc_bad_kie' KIE missing keys: ['address', 'total']"
+  ],
+  "warnings": [
+    "[C-06] Document 'doc_oob' line 1: polygon extends outside image frame (box=[-10.0, 10.0, 150.0, 40.0], image=120x120)",
+    "[C-06] Document 'doc_oob' line 4: polygon extends outside image frame (box=[10.0, 105.0, 90.0, 130.0], image=120x120)",
+    "Train split paired count 5 differs from canonical 626 (subset mode)",
+    "Test split paired count 2 differs from canonical 347 (subset mode)"
+  ]
+}

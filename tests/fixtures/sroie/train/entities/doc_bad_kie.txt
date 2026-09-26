@@ -1,0 +1,4 @@
+{
+  "company": "BAD KIE SHOP",
+  "date": "02/02/2020"
+}

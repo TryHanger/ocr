@@ -1,0 +1,6 @@
+{
+  "company": "BOOK STORE SDN BHD",
+  "date": "25/12/2018",
+  "address": "KUALA LUMPUR, MALAYSIA",
+  "total": "45.00"
+}

@@ -6,6 +6,7 @@ import pytest
 
 from src.core.contracts import (
     BaseDegradation,
+    BaseDatasetAdapter,
     BaseEvaluator,
     BaseKIEEngine,
     BaseOCREngine,
@@ -13,6 +14,7 @@ from src.core.contracts import (
 )
 from src.core.schemas import (
     DegradationSpec,
+    DocumentMetadata,
     KIEGroundTruth,
     KIEResult,
     OCRGroundTruth,
@@ -32,6 +34,9 @@ def test_cannot_instantiate_abstract_contracts():
         BaseKIEEngine()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         BaseEvaluator()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        BaseDatasetAdapter()  # type: ignore[abstract]
+
 
 
 def test_concrete_degradation_implementation():
@@ -116,3 +121,45 @@ def test_concrete_evaluator_implementation():
 
     assert evaluator.evaluate_ocr(ocr_pred, ocr_gt) == {"cer": 0.0}
     assert evaluator.evaluate_kie(kie_pred, kie_gt) == {"f1": 1.0}
+
+
+def test_concrete_dataset_adapter_implementation():
+    class DummyDatasetAdapter(BaseDatasetAdapter):
+        def list_document_ids(self, split: str) -> list[str]:
+            super().list_document_ids(split)
+            return ["doc1"]
+
+        def get_metadata(self, document_id: str) -> DocumentMetadata:
+            super().get_metadata(document_id)
+            return DocumentMetadata(
+                document_id=document_id,
+                image_path="path/to/img.jpg",
+                width=100,
+                height=100,
+                split="train",
+            )
+
+        def get_image(self, document_id: str) -> np.ndarray:
+            super().get_image(document_id)
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+
+        def get_ocr_ground_truth(self, document_id: str) -> OCRGroundTruth:
+            super().get_ocr_ground_truth(document_id)
+            return OCRGroundTruth(document_id=document_id, text="hello")
+
+        def get_kie_ground_truth(self, document_id: str) -> KIEGroundTruth:
+            super().get_kie_ground_truth(document_id)
+            return KIEGroundTruth(document_id=document_id, fields={"total": "10.0"})
+
+    adapter = DummyDatasetAdapter()
+    assert adapter.list_document_ids("train") == ["doc1"]
+    meta = adapter.get_metadata("doc1")
+    assert meta.document_id == "doc1"
+    assert meta.width == 100
+    img = adapter.get_image("doc1")
+    assert img.shape == (100, 100, 3)
+    ocr = adapter.get_ocr_ground_truth("doc1")
+    assert ocr.text == "hello"
+    kie = adapter.get_kie_ground_truth("doc1")
+    assert kie.fields["total"] == "10.0"
+
