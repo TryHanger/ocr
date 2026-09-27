@@ -2,7 +2,31 @@
 
 ## Active
 
-*(Нет активных задач)*
+- **TASK-013 — Real-Data Clean Baseline B0 on SROIE Validation Split ($N=126$)**
+  - *Дата завершения:* 2026-09-27
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Получена фундаментальная контрольная точка исследования — чистый бейзлайн $B_0$ (`D0_S0_P0`) на канонической валидационной выборке SROIE ($N=126$, seed 42) в соответствии с ADR-011, ADR-012, ADR-013, ADR-015 и ADR-016:
+    1. *Канонический сквозной конвейер:* Выполнен пайплайн `SROIE Image -> D0 (identity) -> P0 (identity) -> RapidOCR (PP-OCRv6 small) -> Rule-Based KIE -> Evaluation`. Исходные изображения подавались без синтетических деградаций и без предобработки (`np.array_equal` подтверждён регрессионным тестом).
+    2. *Строгая изоляция Ground Truth (Zero GT Leakage):* Никакие эталонные данные (боксы, транскрипции, сущности) не передавались в OCR и KIE. GT загружался строго на этапе вычисления метрик.
+    3. *Учет сбоев (Failure Accounting):* 126 из 126 документов обработаны успешно (`success: 126, failed: 0, failure_rate: 0.00%`).
+    4. *Метрики OCR (N=126, bootstrap 95% CI, 1000 итераций):*
+       - CER Raw: $0.3518$ (CI: $[0.3326, 0.3723]$, median: $0.3756$)
+       - CER Normalized: $0.3203$ (CI: $[0.2994, 0.3421]$, median: $0.3397$)
+       - WER Raw: $0.4833$ (CI: $[0.4561, 0.5087]$, median: $0.4903$)
+       - WER Normalized: $0.4833$ (CI: $[0.4572, 0.5071]$, median: $0.4903$)
+       - Character-NED Raw: $0.6503$ (CI: $[0.6310, 0.6726]$, median: $0.6270$)
+       - Character-NED Normalized: $0.6816$ (CI: $[0.6592, 0.7019]$, median: $0.6629$)
+    5. *Метрики KIE (N=126):*
+       - Поле `company`: Precision Raw/Norm $0.4206 / 0.4365$, Recall Raw/Norm $0.4206 / 0.4365$, F1 Raw/Norm $0.4206 / 0.4365$
+       - Поле `date`: Precision Raw/Norm $0.9115 / 1.0000$, Recall Raw/Norm $0.8175 / 0.8968$, F1 Raw/Norm $0.8619 / 0.9456$
+       - Поле `address`: Precision Raw/Norm $0.0000 / 0.0080$, Recall Raw/Norm $0.0000 / 0.0079$, F1 Raw/Norm $0.0000 / 0.0079$
+       - Поле `total`: Precision Raw/Norm $0.6500 / 0.7100$, Recall Raw/Norm $0.5159 / 0.5635$, F1 Raw/Norm $0.5752 / 0.6283$
+       - Macro F1: Raw $0.4644$, Normalized $0.4762$ (CI: $[0.4425, 0.5060]$)
+       - Macro Precision / Recall: Normalized Precision $0.5386$, Normalized Recall $0.4762$
+       - Document Exact Match: Raw Doc-EM $0.0000$, Normalized Doc-EM $0.0000$
+       - SROIE Official Task-3 Entity Micro: Precision $0.5172$, Recall $0.4762$, Hmean (F1) $0.4959$ (TP: 240, Pred: 464, GT: 504)
+    6. *Артефакты:* Сформированы в `experiments/runs/b0_clean_validation_n126/` (`config.yaml`, `manifest.json`, `per_document.jsonl`, `summary.json`, `logs/run.log`). Хеш конфигурации: `97c6bfd0d9b1...`, статус данных: `REAL_SROIE`.
+    7. *Тестирование:* Добавлены 3 регрессионных теста (`test_b0_original_image_invariant`, `test_b0_aggregate_condition_records_analytical_prf`, `test_run_experiment_cli_b0_and_data_root`). Полный набор тестов: 399 passed, 0 failed, 92% coverage.
 
 - **TASK-012 — Real-Data Degradation Calibration on Validation Split ($N=126$)**
   - *Дата завершения:* 2026-09-27

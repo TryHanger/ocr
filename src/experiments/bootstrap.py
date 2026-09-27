@@ -135,12 +135,75 @@ def aggregate_condition_records(
     ]
 
     per_field_summary: Dict[str, Any] = {}
+    p_raw_list: List[float] = []
+    r_raw_list: List[float] = []
+    f1_raw_list: List[float] = []
+    p_norm_list: List[float] = []
+    r_norm_list: List[float] = []
+    f1_norm_list: List[float] = []
+
     for f in target_fields:
         r_vals = per_field_matches_raw[f]
         n_vals = per_field_matches_norm[f]
+
+        tp_raw, fp_raw, fn_raw = 0, 0, 0
+        tp_norm, fp_norm, fn_norm = 0, 0, 0
+        for r in successful_records:
+            if "kie_metrics" not in r:
+                continue
+            km = r["kie_metrics"]
+            has_gt_raw = bool(km.get("raw_ground_truth", {}).get(f, "").strip())
+            has_pr_raw = bool(km.get("raw_predictions", {}).get(f, "").strip())
+            is_match_raw = bool(km.get("field_matches_raw", {}).get(f, False))
+            if has_gt_raw and has_pr_raw:
+                if is_match_raw:
+                    tp_raw += 1
+                else:
+                    fp_raw += 1
+                    fn_raw += 1
+            elif has_pr_raw and not has_gt_raw:
+                fp_raw += 1
+            elif has_gt_raw and not has_pr_raw:
+                fn_raw += 1
+
+            has_gt_norm = bool(km.get("normalized_ground_truth", {}).get(f, "").strip())
+            has_pr_norm = bool(km.get("normalized_predictions", {}).get(f, "").strip())
+            is_match_norm = bool(km.get("field_matches_normalized", {}).get(f, False))
+            if has_gt_norm and has_pr_norm:
+                if is_match_norm:
+                    tp_norm += 1
+                else:
+                    fp_norm += 1
+                    fn_norm += 1
+            elif has_pr_norm and not has_gt_norm:
+                fp_norm += 1
+            elif has_gt_norm and not has_pr_norm:
+                fn_norm += 1
+
+        prec_raw = round(tp_raw / (tp_raw + fp_raw), 4) if (tp_raw + fp_raw) > 0 else 0.0
+        rec_raw = round(tp_raw / (tp_raw + fn_raw), 4) if (tp_raw + fn_raw) > 0 else 0.0
+        f1_r = round(2.0 * prec_raw * rec_raw / (prec_raw + rec_raw), 4) if (prec_raw + rec_raw) > 0 else 0.0
+
+        prec_norm = round(tp_norm / (tp_norm + fp_norm), 4) if (tp_norm + fp_norm) > 0 else 0.0
+        rec_norm = round(tp_norm / (tp_norm + fn_norm), 4) if (tp_norm + fn_norm) > 0 else 0.0
+        f1_n = round(2.0 * prec_norm * rec_norm / (prec_norm + rec_norm), 4) if (prec_norm + rec_norm) > 0 else 0.0
+
+        p_raw_list.append(prec_raw)
+        r_raw_list.append(rec_raw)
+        f1_raw_list.append(f1_r)
+        p_norm_list.append(prec_norm)
+        r_norm_list.append(rec_norm)
+        f1_norm_list.append(f1_n)
+
         per_field_summary[f] = {
             "match_rate_raw": round(float(np.mean(r_vals)), 4) if r_vals else 0.0,
             "match_rate_normalized": round(float(np.mean(n_vals)), 4) if n_vals else 0.0,
+            "precision_raw": prec_raw,
+            "recall_raw": rec_raw,
+            "f1_raw": f1_r,
+            "precision_normalized": prec_norm,
+            "recall_normalized": rec_norm,
+            "f1_normalized": f1_n,
         }
 
     raw_doc_em_stats = _stats(raw_doc_em_list, bootstrap_seed + 10)
@@ -168,6 +231,12 @@ def aggregate_condition_records(
     s_rec = round(sroie_tp / sroie_gt, 4) if sroie_gt > 0 else 0.0
     s_hmean = round(2.0 * s_prec * s_rec / (s_prec + s_rec), 4) if (s_prec + s_rec) > 0 else 0.0
 
+    macro_precision_norm = round(sum(p_norm_list) / len(p_norm_list), 4) if p_norm_list else 0.0
+    macro_recall_norm = round(sum(r_norm_list) / len(r_norm_list), 4) if r_norm_list else 0.0
+    macro_precision_raw = round(sum(p_raw_list) / len(p_raw_list), 4) if p_raw_list else 0.0
+    macro_recall_raw = round(sum(r_raw_list) / len(r_raw_list), 4) if r_raw_list else 0.0
+    macro_f1_raw_avg = round(sum(f1_raw_list) / len(f1_raw_list), 4) if f1_raw_list else 0.0
+
     kie_summary = {
         "sample_size": len(raw_doc_em_list),
         "per_field": per_field_summary,
@@ -177,6 +246,11 @@ def aggregate_condition_records(
         "normalized_doc_em_ci_95": norm_doc_em_stats["ci_95"],
         "macro_f1_normalized": macro_f1_stats["mean"],
         "macro_f1_ci_95": macro_f1_stats["ci_95"],
+        "macro_precision_normalized": macro_precision_norm,
+        "macro_recall_normalized": macro_recall_norm,
+        "macro_precision_raw": macro_precision_raw,
+        "macro_recall_raw": macro_recall_raw,
+        "macro_f1_raw": macro_f1_raw_avg,
         "sroie_official_compatible": {
             "entity_precision": s_prec,
             "entity_recall": s_rec,

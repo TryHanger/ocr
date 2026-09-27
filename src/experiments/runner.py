@@ -484,4 +484,12 @@ class UnifiedExperimentRunner:
         self.logger.info("Experiment run %s completed in %.2fs", self.experiment_id, total_duration_sec)
         self.logger.info("Artifacts saved to: %s", self.run_dir)
 
+        # Explicitly close and remove all logger handlers to release file locks on Windows
+        for handler in list(self.logger.handlers):
+            try:
+                handler.close()
+            except Exception:
+                pass
+            self.logger.removeHandler(handler)
+
         return summary_payload

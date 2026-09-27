@@ -543,3 +543,130 @@ def test_runner_incremental_flush(tmp_path: Path, monkeypatch):
         final_lines = [l for l in f if l.strip()]
         assert len(final_lines) == 5
 
+
+def test_b0_original_image_invariant(tmp_path: Path):
+    """Verify B0 (D0_S0_P0) passes the original image bitwise-unmodified to OCR."""
+    cfg = {
+        "experiment_seed": 42,
+        "dataset": {"root": "tests/fixtures/sroie_valid", "split": "validation"},
+        "matrix": {"include_control": True, "degradations": [], "severities": [], "preprocessing_pipelines": {}},
+        "ocr": {"engine_name": "mock"},
+        "kie": {"engine_name": "mock"},
+        "output": {"output_dir": str(tmp_path)},
+    }
+    runner = UnifiedExperimentRunner(
+        config=cfg,
+        output_dir=tmp_path,
+        allow_fixture=True,
+        experiment_id="b0_invariant_test",
+    )
+
+    captured_images = []
+    orig_recognize = runner._setup_engines
+
+    # Monkeypatch OCR recognize to capture the received image
+    class MonitoredOCR:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def recognize(self, image, document_id):
+            captured_images.append((document_id, image.copy()))
+            return self.inner.recognize(image, document_id)
+
+    adapter_ref = None
+
+    # Run experiment
+    def patched_setup():
+        nonlocal adapter_ref
+        ocr_e, kie_e, ev, ad = orig_recognize()
+        adapter_ref = ad
+        return MonitoredOCR(ocr_e), kie_e, ev, ad
+
+    runner._setup_engines = patched_setup
+    summary = runner.run()
+
+    assert adapter_ref is not None
+    assert len(captured_images) > 0
+    for doc_id, rec_img in captured_images:
+        expected_img = adapter_ref.get_image(doc_id)
+        assert np.array_equal(rec_img, expected_img), f"B0 image {doc_id} was modified before OCR!"
+
+
+def test_b0_aggregate_condition_records_analytical_prf():
+    """Verify aggregate_condition_records computes per-field and macro P/R/F1."""
+    records = [
+        {
+            "status": "success",
+            "ocr_metrics": {"cer_raw": 0.0, "wer_raw": 0.0, "char_ned_raw": 1.0, "cer_normalized": 0.0, "wer_normalized": 0.0, "char_ned_normalized": 1.0},
+            "kie_metrics": {
+                "field_matches_raw": {"company": True, "date": True, "address": False, "total": False},
+                "field_matches_normalized": {"company": True, "date": True, "address": True, "total": False},
+                "raw_doc_em": False,
+                "normalized_doc_em": False,
+                "raw_ground_truth": {"company": "ABC", "date": "01/01/2020", "address": "Jalan 1", "total": "10.00"},
+                "raw_predictions": {"company": "ABC", "date": "01/01/2020", "address": "Wrong", "total": "20.00"},
+                "normalized_ground_truth": {"company": "abc", "date": "01/01/2020", "address": "jalan 1", "total": "10.00"},
+                "normalized_predictions": {"company": "abc", "date": "01/01/2020", "address": "jalan 1", "total": "20.00"},
+            },
+        }
+    ]
+    res = aggregate_condition_records(records, bootstrap_seed=42)
+    ks = res["kie"]
+    pf = ks["per_field"]
+
+    # Company: match
+    assert pf["company"]["precision_raw"] == 1.0
+    assert pf["company"]["recall_raw"] == 1.0
+    assert pf["company"]["f1_raw"] == 1.0
+    assert pf["company"]["f1_normalized"] == 1.0
+
+    # Address: raw fail, norm match
+    assert pf["address"]["f1_raw"] == 0.0
+    assert pf["address"]["f1_normalized"] == 1.0
+
+    # Total: fail
+    assert pf["total"]["f1_raw"] == 0.0
+    assert pf["total"]["f1_normalized"] == 0.0
+
+    # Macro averages
+    assert "macro_precision_normalized" in ks
+    assert "macro_recall_normalized" in ks
+    assert "macro_f1_normalized" in ks
+    assert "macro_f1_raw" in ks
+
+
+def test_run_experiment_cli_b0_and_data_root(monkeypatch, tmp_path: Path):
+    """Verify scripts/run_experiment.py CLI parses --baseline B0 and --data-root."""
+    from scripts.run_experiment import main
+
+    test_args = [
+        "run_experiment.py",
+        "--config", "configs/b0_baseline.yaml",
+        "--data-root", "tests/fixtures/sroie_valid",
+        "--split", "validation",
+        "--subset-size", "1",
+        "--allow-fixture",
+        "--output-dir", str(tmp_path),
+        "--experiment-id", "cli_test_b0",
+    ]
+    monkeypatch.setattr("sys.argv", test_args)
+
+    # Monkeypatch runner to use mock engines to keep CLI test fast
+    orig_init = UnifiedExperimentRunner.__init__
+    def patched_init(self, *args, **kwargs):
+        cfg = kwargs.get("config", args[0] if args else {})
+        cfg["ocr"] = {"engine_name": "mock"}
+        cfg["kie"] = {"engine_name": "mock"}
+        orig_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(UnifiedExperimentRunner, "__init__", patched_init)
+
+    ret = main()
+    assert ret == 0
+    run_dir = tmp_path / "cli_test_b0"
+    assert (run_dir / "summary.json").is_file()
+    assert (run_dir / "manifest.json").is_file()
+    assert (run_dir / "per_document.jsonl").is_file()
+
+
+

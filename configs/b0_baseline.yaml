@@ -1,0 +1,57 @@
+# SROIE2019 Clean Baseline (B0) Configuration
+# Primary Control Condition: D0_S0_P0 on SROIE Validation Split (N=126)
+version: "1.0.0"
+experiment_seed: 42
+
+dataset:
+  root: "data/SROIE2019"
+  candidate_roots:
+    - "data/SROIE2019"
+    - "data"
+  split: "validation"
+  subset_size: null  # Evaluates all N=126 validation documents
+  subset_seed: 42
+
+# Matrix definition restricted strictly to B0 control condition
+matrix:
+  include_control: true  # D0_S0_P0 (B0)
+  degradations: []
+  severities: []
+  preprocessing_pipelines: {}
+
+ocr:
+  engine_name: "rapidocr"
+  package_version: "3.9.2"
+  reading_order:
+    line_tolerance_factor: 0.5
+  resize_policy:
+    max_side_len: 2000
+    min_side_len: 30
+    det_limit_side_len: 736
+    det_limit_type: "min"
+  parameters:
+    text_score: 0.5
+    min_confidence: 0.0
+    use_cls: true
+
+kie:
+  engine_name: "rule_based"
+  engine:
+    fallback_largest_amount: false
+    fallback_penalty: 0.5
+    min_confidence_threshold: 0.2
+
+evaluation:
+  target_fields:
+    - "company"
+    - "date"
+    - "address"
+    - "total"
+  bootstrap:
+    iterations: 1000
+    ci: 0.95
+    seed: 42
+
+output:
+  output_dir: "experiments/runs"
+  save_images: false

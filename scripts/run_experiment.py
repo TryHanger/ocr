@@ -83,6 +83,19 @@ def main() -> int:
         help="Enable detailed per-stage timing logging to stdout and run.log",
     )
     parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=None,
+        help="Explicit path to SROIE dataset root directory",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=str,
+        default=None,
+        choices=["B0", "B1", "B2", "b0", "b1", "b2"],
+        help="Filter matrix to evaluate a specific baseline condition set (e.g. B0, B1, B2)",
+    )
+    parser.add_argument(
         "--experiment-id",
         type=str,
         default=None,
@@ -99,6 +112,10 @@ def main() -> int:
         return 1
 
     # Apply CLI overrides
+    if args.data_root:
+        resolved_root_str = str(args.data_root.resolve())
+        config.setdefault("dataset", {})["root"] = resolved_root_str
+        config.setdefault("dataset", {})["candidate_roots"] = [resolved_root_str]
     if args.split:
         config.setdefault("dataset", {})["split"] = args.split
     if args.subset_size is not None:
@@ -108,6 +125,18 @@ def main() -> int:
         config.setdefault("dataset", {})["subset_seed"] = args.seed
     if args.save_images:
         config.setdefault("output", {})["save_images"] = True
+    if args.baseline:
+        b_type = args.baseline.upper()
+        if b_type == "B0":
+            config.setdefault("matrix", {})["include_control"] = True
+            config.setdefault("matrix", {})["degradations"] = []
+            config.setdefault("matrix", {})["severities"] = []
+            config.setdefault("matrix", {})["preprocessing_pipelines"] = {}
+        elif b_type == "B1":
+            config.setdefault("matrix", {})["include_control"] = False
+            config.setdefault("matrix", {})["preprocessing_pipelines"] = {}
+        elif b_type == "B2":
+            config.setdefault("matrix", {})["include_control"] = False
 
     try:
         runner = UnifiedExperimentRunner(
