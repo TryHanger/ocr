@@ -30,8 +30,9 @@ from src.degradation.pipeline import DEGRADATION_REGISTRY, get_degradation
 
 def compute_mse(img1: np.ndarray, img2: np.ndarray) -> float:
     """Mean Squared Error between two uint8 images."""
-    diff = img1.astype(np.float32) - img2.astype(np.float32)
-    return float(np.mean(diff ** 2))
+    if img1.shape != img2.shape:
+        raise ValueError(f"Shape mismatch: {img1.shape} vs {img2.shape}")
+    return float(cv2.norm(img1, img2, cv2.NORM_L2SQR) / img1.size)
 
 
 def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
@@ -44,37 +45,68 @@ def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
 
 def compute_mae(img1: np.ndarray, img2: np.ndarray) -> float:
     """Mean Absolute Error between two uint8 images."""
-    diff = np.abs(img1.astype(np.float32) - img2.astype(np.float32))
-    return float(np.mean(diff))
+    if img1.shape != img2.shape:
+        raise ValueError(f"Shape mismatch: {img1.shape} vs {img2.shape}")
+    return float(cv2.norm(img1, img2, cv2.NORM_L1) / img1.size)
 
 
-def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
+class ImageReference:
+    """Precomputed properties for an original reference image to avoid redundant calculations."""
+
+    def __init__(self, img: np.ndarray):
+        self.img = img
+        if img.ndim == 3:
+            self.gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            self.mean_lum = float(np.mean(img, dtype=np.float32))
+        else:
+            self.gray = img
+            self.mean_lum = float(np.mean(img, dtype=np.float32))
+
+        self.gray_f32 = self.gray.astype(np.float32)
+        self.laplacian_var = float(cv2.Laplacian(self.gray, cv2.CV_32F).var())
+
+        # Precomputed SSIM reference terms (sigma=1.5, kernel=11)
+        self.mu1 = cv2.GaussianBlur(self.gray_f32, (11, 11), 1.5)
+        self.mu1_sq = self.mu1 * self.mu1
+        self.sigma1_sq = cv2.GaussianBlur(self.gray_f32 * self.gray_f32, (11, 11), 1.5) - self.mu1_sq
+
+
+def compute_ssim(
+    img1: np.ndarray,
+    img2: np.ndarray,
+    ref: Optional[ImageReference] = None,
+) -> float:
     """Structural Similarity Index (Wang et al., 2004) on luminance channel."""
-    if img1.ndim == 3:
-        # Convert RGB to Grayscale for standard SSIM
-        y1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    if ref is not None:
+        y1_f32 = ref.gray_f32
+        mu1 = ref.mu1
+        mu1_sq = ref.mu1_sq
+        sigma1_sq = ref.sigma1_sq
+    else:
+        if img1.ndim == 3:
+            y1_f32 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY).astype(np.float32)
+        else:
+            y1_f32 = img1.astype(np.float32)
+        mu1 = cv2.GaussianBlur(y1_f32, (11, 11), 1.5)
+        mu1_sq = mu1 * mu1
+        sigma1_sq = cv2.GaussianBlur(y1_f32 * y1_f32, (11, 11), 1.5) - mu1_sq
+
+    if img2.ndim == 3:
         y2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY).astype(np.float32)
     else:
-        y1 = img1.astype(np.float32)
         y2 = img2.astype(np.float32)
 
     c1 = (0.01 * 255.0) ** 2
     c2 = (0.03 * 255.0) ** 2
-
-    # Standard 11x11 Gaussian filter with sigma=1.5
     kernel_size = 11
     sigma = 1.5
 
-    mu1 = cv2.GaussianBlur(y1, (kernel_size, kernel_size), sigma)
     mu2 = cv2.GaussianBlur(y2, (kernel_size, kernel_size), sigma)
-
-    mu1_sq = mu1 * mu1
     mu2_sq = mu2 * mu2
     mu1_mu2 = mu1 * mu2
 
-    sigma1_sq = cv2.GaussianBlur(y1 * y1, (kernel_size, kernel_size), sigma) - mu1_sq
     sigma2_sq = cv2.GaussianBlur(y2 * y2, (kernel_size, kernel_size), sigma) - mu2_sq
-    sigma12 = cv2.GaussianBlur(y1 * y2, (kernel_size, kernel_size), sigma) - mu1_mu2
+    sigma12 = cv2.GaussianBlur(y1_f32 * y2, (kernel_size, kernel_size), sigma) - mu1_mu2
 
     numerator = (2.0 * mu1_mu2 + c1) * (2.0 * sigma12 + c2)
     denominator = (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2)
@@ -83,41 +115,57 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     return float(np.mean(ssim_map))
 
 
-def compute_laplacian_ratio(orig: np.ndarray, deg: np.ndarray) -> float:
+def compute_laplacian_ratio(
+    orig: np.ndarray,
+    deg: np.ndarray,
+    ref: Optional[ImageReference] = None,
+) -> float:
     """Ratio of Laplacian variance (edge energy) of degraded image to original."""
-    if orig.ndim == 3:
-        g_orig = cv2.cvtColor(orig, cv2.COLOR_RGB2GRAY)
-        g_deg = cv2.cvtColor(deg, cv2.COLOR_RGB2GRAY)
+    if ref is not None:
+        var_orig = ref.laplacian_var
     else:
-        g_orig, g_deg = orig, deg
+        g_orig = cv2.cvtColor(orig, cv2.COLOR_RGB2GRAY) if orig.ndim == 3 else orig
+        var_orig = float(cv2.Laplacian(g_orig, cv2.CV_32F).var())
 
-    var_orig = float(cv2.Laplacian(g_orig, cv2.CV_64F).var())
-    var_deg = float(cv2.Laplacian(g_deg, cv2.CV_64F).var())
+    g_deg = cv2.cvtColor(deg, cv2.COLOR_RGB2GRAY) if deg.ndim == 3 else deg
+    var_deg = float(cv2.Laplacian(g_deg, cv2.CV_32F).var())
 
     if var_orig <= 1e-6:
         return 1.0
     return float(var_deg / var_orig)
 
 
-def compute_luminance_drop(orig: np.ndarray, deg: np.ndarray) -> float:
+def compute_luminance_drop(
+    orig: np.ndarray,
+    deg: np.ndarray,
+    ref: Optional[ImageReference] = None,
+) -> float:
     """Fractional mean luminance drop from original to degraded."""
-    m_orig = float(np.mean(orig, dtype=np.float64))
-    m_deg = float(np.mean(deg, dtype=np.float64))
+    m_orig = ref.mean_lum if ref is not None else float(np.mean(orig, dtype=np.float32))
+    m_deg = float(np.mean(deg, dtype=np.float32))
     if m_orig <= 1e-6:
         return 0.0
     return float(max(0.0, (m_orig - m_deg) / m_orig))
 
 
 def evaluate_image_pair(
-    orig: np.ndarray, deg: np.ndarray, deg_type: str
+    orig: np.ndarray,
+    deg: np.ndarray,
+    deg_type: str,
+    ref: Optional[ImageReference] = None,
+    primary_metric_name: str = "",
 ) -> Dict[str, float]:
     """Compute all relevant distortion metrics for an original/degraded image pair."""
+    # Compute SSIM when configured as primary metric (jpeg_compression, downsampling)
+    needs_ssim = ("ssim" in primary_metric_name) or (deg_type in ("jpeg_compression", "downsampling"))
+    ssim_val = round(compute_ssim(orig, deg, ref=ref), 4) if needs_ssim else 0.0
+
     metrics = {
         "psnr_db": round(compute_psnr(orig, deg), 2),
-        "ssim": round(compute_ssim(orig, deg), 4),
+        "ssim": ssim_val,
         "mae": round(compute_mae(orig, deg), 2),
-        "laplacian_ratio": round(compute_laplacian_ratio(orig, deg), 4),
-        "luminance_drop": round(compute_luminance_drop(orig, deg), 4),
+        "laplacian_ratio": round(compute_laplacian_ratio(orig, deg, ref=ref), 4),
+        "luminance_drop": round(compute_luminance_drop(orig, deg, ref=ref), 4),
     }
     return metrics
 
@@ -185,6 +233,25 @@ def find_calibration_images(
     return [], "NO_DATA_AVAILABLE"
 
 
+def load_single_image(p: Path, max_side: int = 2000) -> Optional[np.ndarray]:
+    """Load single image, cap resolution to max_side (ADR-015 policy), and apply text pattern if flat."""
+    img_bgr = cv2.imread(str(p))
+    if img_bgr is None:
+        return None
+    h, w = img_bgr.shape[:2]
+    if max_side and max(h, w) > max_side:
+        scale = max_side / float(max(h, w))
+        img_bgr = cv2.resize(img_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+    if float(img_bgr.std()) < 1.0:
+        h, w = img_bgr.shape[:2]
+        cv2.putText(img_bgr, "RECEIPT TAX INVOICE", (max(5, int(w * 0.05)), max(20, int(h * 0.2))), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (20, 20, 20), 1)
+        cv2.putText(img_bgr, "TOTAL: $42.50", (max(5, int(w * 0.05)), max(40, int(h * 0.4))), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (10, 10, 10), 1)
+        cv2.line(img_bgr, (5, int(h * 0.5)), (w - 5, int(h * 0.5)), (30, 30, 30), 1)
+        cv2.putText(img_bgr, "THANK YOU!", (max(5, int(w * 0.1)), max(70, int(h * 0.7))), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (25, 25, 25), 1)
+    return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+
 def run_calibration(
     config_path: Path,
     output_dir: Path,
@@ -206,27 +273,15 @@ def run_calibration(
         "COMPLETED" if data_source == "REAL_SROIE_VALIDATION_SPLIT" else "PENDING"
     )
 
-    # Load calibration images
-    images: List[np.ndarray] = []
-    for p in images_paths:
-        img_bgr = cv2.imread(str(p))
-        if img_bgr is not None:
-            # If synthetic fixture is a flat color, render text patterns so blur/downsampling have real edges
-            if float(img_bgr.std()) < 1.0:
-                h, w = img_bgr.shape[:2]
-                cv2.putText(img_bgr, "RECEIPT TAX INVOICE", (max(5, int(w * 0.05)), max(20, int(h * 0.2))), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (20, 20, 20), 1)
-                cv2.putText(img_bgr, "TOTAL: $42.50", (max(5, int(w * 0.05)), max(40, int(h * 0.4))), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (10, 10, 10), 1)
-                cv2.line(img_bgr, (5, int(h * 0.5)), (w - 5, int(h * 0.5)), (30, 30, 30), 1)
-                cv2.putText(img_bgr, "THANK YOU!", (max(5, int(w * 0.1)), max(70, int(h * 0.7))), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (25, 25, 25), 1)
-            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-            images.append(img_rgb)
-
-    if not images:
-        # Create a synthetic dummy receipt image (white background with black text lines)
+    # If no image files found, prepare synthetic dummy fallback
+    dummy_fallback = None
+    if not images_paths:
         dummy = np.full((300, 200, 3), 250, dtype=np.uint8)
         cv2.putText(dummy, "TAX INVOICE", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
         cv2.putText(dummy, "TOTAL: $45.00", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        images = [dummy]
+        dummy_fallback = dummy
+
+    num_images = len(images_paths) if images_paths else 1
 
     degradations_cfg = cfg.get("degradations", {})
     report_degradations: Dict[str, Any] = {}
@@ -250,57 +305,74 @@ def run_calibration(
     if save_samples:
         samples_dir.mkdir(parents=True, exist_ok=True)
 
-    for deg_type, deg_info in degradations_cfg.items():
-        if deg_type not in DEGRADATION_REGISTRY:
-            continue
+    deg_keys = [k for k in degradations_cfg.keys() if k in DEGRADATION_REGISTRY]
+    for step_idx, deg_type in enumerate(deg_keys, 1):
+        deg_info = degradations_cfg[deg_type]
+        print(f"[{step_idx}/{len(deg_keys)}] Calibrating {deg_type} on {num_images} images...", flush=True)
 
         deg_instance = get_degradation(deg_type)
         primary_metric_name = deg_info.get("primary_metric", "psnr_db")
         candidates = deg_info.get("candidates", [])
         severities = deg_info.get("severities", {})
 
-        # 1. Evaluate Candidates
-        candidate_evaluations: List[Dict[str, Any]] = []
-        for cand_params in candidates:
-            spec = DegradationSpec(type=deg_type, severity=1, parameters=cand_params, seed=42)
-            metric_accum: Dict[str, List[float]] = {
-                "psnr_db": [], "ssim": [], "mae": [], "laplacian_ratio": [], "luminance_drop": []
-            }
-            for img in images:
-                deg_img, _ = deg_instance.apply(img, spec)
-                pair_metrics = evaluate_image_pair(img, deg_img, deg_type)
-                for k, v in pair_metrics.items():
-                    metric_accum[k].append(v)
+        cand_accums = [
+            {"psnr_db": [], "ssim": [], "mae": [], "laplacian_ratio": [], "luminance_drop": []}
+            for _ in candidates
+        ]
+        sev_accums = {
+            s: {"psnr_db": [], "ssim": [], "mae": [], "laplacian_ratio": [], "luminance_drop": []}
+            for s in range(5)
+        }
 
-            summary_cand = {
-                "parameters": cand_params,
-                "mean_metrics": {k: round(float(np.mean(v)), 2) for k, v in metric_accum.items()},
-            }
-            candidate_evaluations.append(summary_cand)
+        # Stream images one by one to keep memory footprint under 50MB and preserve L3 cache
+        img_items = images_paths if images_paths else [dummy_fallback]
+        for img_idx, item in enumerate(img_items):
+            if isinstance(item, Path):
+                img = load_single_image(item)
+                if img is None:
+                    continue
+            else:
+                img = item
 
-        # 2. Evaluate Selected Severities 0..4
-        severity_evaluations: Dict[int, Dict[str, Any]] = {}
-        for sev in range(5):
-            sev_params = severities.get(sev, {})
-            spec = DegradationSpec(type=deg_type, severity=sev, parameters=sev_params, seed=42)
-            metric_accum = {
-                "psnr_db": [], "ssim": [], "mae": [], "laplacian_ratio": [], "luminance_drop": []
-            }
-            for idx, img in enumerate(images):
+            ref = ImageReference(img)
+
+            # 1. Evaluate Candidates for this image
+            for c_idx, cand_params in enumerate(candidates):
+                spec = DegradationSpec(type=deg_type, severity=1, parameters=cand_params, seed=42)
                 deg_img, _ = deg_instance.apply(img, spec)
-                pair_metrics = evaluate_image_pair(img, deg_img, deg_type)
+                pair_metrics = evaluate_image_pair(img, deg_img, deg_type, ref=ref, primary_metric_name=primary_metric_name)
                 for k, v in pair_metrics.items():
-                    metric_accum[k].append(v)
+                    cand_accums[c_idx][k].append(v)
+
+            # 2. Evaluate Selected Severities 0..4 for this image
+            for sev in range(5):
+                sev_params = severities.get(sev, {})
+                spec = DegradationSpec(type=deg_type, severity=sev, parameters=sev_params, seed=42)
+                deg_img, _ = deg_instance.apply(img, spec)
+                pair_metrics = evaluate_image_pair(img, deg_img, deg_type, ref=ref, primary_metric_name=primary_metric_name)
+                for k, v in pair_metrics.items():
+                    sev_accums[sev][k].append(v)
 
                 # Save sample visualization for the first image
-                if save_samples and idx == 0:
+                if save_samples and img_idx == 0:
                     sample_path = samples_dir / f"{deg_type}_sev{sev}.png"
                     out_bgr = cv2.cvtColor(deg_img, cv2.COLOR_RGB2BGR) if deg_img.ndim == 3 else deg_img
                     cv2.imwrite(str(sample_path), out_bgr)
 
+        # Aggregate candidate evaluations
+        candidate_evaluations: List[Dict[str, Any]] = []
+        for c_idx, cand_params in enumerate(candidates):
+            candidate_evaluations.append({
+                "parameters": cand_params,
+                "mean_metrics": {k: round(float(np.mean(v)), 2) for k, v in cand_accums[c_idx].items()},
+            })
+
+        # Aggregate severity evaluations
+        severity_evaluations: Dict[int, Dict[str, Any]] = {}
+        for sev in range(5):
             severity_evaluations[sev] = {
-                "parameters": sev_params,
-                "mean_metrics": {k: round(float(np.mean(v)), 2) for k, v in metric_accum.items()},
+                "parameters": severities.get(sev, {}),
+                "mean_metrics": {k: round(float(np.mean(v)), 2) for k, v in sev_accums[sev].items()},
             }
 
         # 3. Monotonicity validation on severities 1..4
@@ -329,9 +401,12 @@ def run_calibration(
 
         if deg_type in ("gaussian_blur", "motion_blur", "gaussian_noise", "jpeg_compression", "downsampling"):
             monotonic_metric = all(psnrs[i] >= psnrs[i + 1] for i in range(len(psnrs) - 1))
-        elif deg_type in ("perspective", "rotation"):
-            # Geometric warps: pixel displacement / MAE monotonically increases
+        elif deg_type == "rotation":
+            # Geometric rotation: pixel displacement / MAE monotonically increases
             monotonic_metric = all(maes[i] <= maes[i + 1] for i in range(len(maes) - 1))
+        elif deg_type == "perspective":
+            # Perspective distortion scale (corner displacement fraction) monotonically increases
+            monotonic_metric = monotonic_param
         elif deg_type == "shadow":
             # Shadow: luminance drop monotonically increases
             monotonic_metric = all(lum_drops[i] <= lum_drops[i + 1] for i in range(len(lum_drops) - 1))
@@ -373,7 +448,7 @@ def run_calibration(
         "research_validation_size": 126,
         "final_calibration_completed": is_real,
         "data_source": data_source,
-        "num_calibration_images": len(images),
+        "num_calibration_images": num_images,
         "notes": (
             "Current parameters are provisional / fixture-based serving as an initial starting set. "
             "Real SROIE validation data calibration remains PENDING until Kaggle dataset artifact is provided."

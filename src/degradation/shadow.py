@@ -36,9 +36,10 @@ class ShadowDegradation(BaseDegradationPrimitive):
         rad = math.radians(angle)
         cos_a, sin_a = math.cos(rad), math.sin(rad)
 
-        # Coordinate grid
-        ys, xs = np.mgrid[0:h, 0:w]
-        proj = xs * cos_a + ys * sin_a
+        # Coordinate grid via 1D broadcasting for fast vectorization
+        xs = np.arange(w, dtype=np.float32) * cos_a
+        ys = np.arange(h, dtype=np.float32) * sin_a
+        proj = ys[:, None] + xs[None, :]
         p_min, p_max = proj.min(), proj.max()
         if p_max > p_min:
             proj_norm = (proj - p_min) / (p_max - p_min)
