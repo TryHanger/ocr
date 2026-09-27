@@ -19,7 +19,11 @@ from src.datasets.sroie import SROIEAdapter
 from src.degradation import get_degradation
 from src.evaluation.kie_metrics import KIEEvaluator
 from src.experiments.bootstrap import aggregate_condition_records
-from src.experiments.conditions import ExperimentCondition, build_conditions_matrix
+from src.experiments.conditions import (
+    DEGRADATION_CODE_MAP,
+    ExperimentCondition,
+    build_conditions_matrix,
+)
 from src.experiments.config import compute_config_hash, load_experiment_config
 from src.experiments.seed import derive_seed
 from src.experiments.split import resolve_dataset_root, resolve_split_documents
@@ -113,6 +117,121 @@ class UnifiedExperimentRunner:
         self.logger.addHandler(stream_handler)
         self.logger.propagate = False
 
+        # Load calibrated degradation configuration
+        self.degradation_config = self._load_degradation_configs()
+
+    def _load_degradation_configs(self) -> Dict[str, Any]:
+        """Load degradation parameters configuration (configs/degradation.yaml)."""
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        deg_cfg_path = Path(self.config.get("degradation_config", "configs/degradation.yaml"))
+        if not deg_cfg_path.is_absolute():
+            deg_cfg_path = (repo_root / deg_cfg_path).resolve()
+        if deg_cfg_path.is_file():
+            with open(deg_cfg_path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        return {}
+
+    def _resolve_degradation_params(self, degradation_type: str, severity: int) -> Dict[str, Any]:
+        """Resolve calibrated degradation parameters for a given type and severity."""
+        if severity == 0 or degradation_type in ("none", "control"):
+            return {}
+        degs = self.degradation_config.get("degradations", {})
+        if degradation_type not in degs:
+            raise KeyError(f"Degradation '{degradation_type}' not found in degradation configuration.")
+        sev_dict = degs[degradation_type].get("severities", {})
+        params = sev_dict.get(severity) if severity in sev_dict else sev_dict.get(str(severity))
+        if params is None:
+            raise KeyError(
+                f"Severity '{severity}' for degradation '{degradation_type}' not found in degradation configuration."
+            )
+        return dict(params)
+
+    def _load_b0_reference(self) -> Optional[Dict[str, Any]]:
+        """Load frozen B0 reference summary if available."""
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        b0_ref_path = self.config.get("b0_reference_path", "experiments/runs/b0_clean_validation_n126/summary.json")
+        p = Path(b0_ref_path)
+        if not p.is_absolute():
+            p = (repo_root / p).resolve()
+        if p.is_file():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    b0_data = json.load(f)
+                conds = b0_data.get("conditions", {})
+                if "D0_S0_P0" in conds:
+                    git_commit = b0_data.get("git_commit")
+                    manifest_path = p.parent / "manifest.json"
+                    if not git_commit and manifest_path.is_file():
+                        try:
+                            with open(manifest_path, "r", encoding="utf-8") as mf:
+                                git_commit = json.load(mf).get("git_commit")
+                        except Exception:
+                            pass
+                    return {
+                        "source": "frozen_b0_reference",
+                        "experiment_id": b0_data.get("experiment_id"),
+                        "config_hash": b0_data.get("config_hash"),
+                        "git_commit": git_commit or "UNKNOWN_COMMIT",
+                        "path": str(p),
+                        "metrics": conds["D0_S0_P0"],
+                    }
+            except Exception as e:
+                self.logger.warning("Could not load B0 reference from %s: %s", p, e)
+        return None
+
+    def _load_b1_reference(self) -> Optional[Dict[str, Any]]:
+        """Load frozen B1 reference summary and metadata if configured."""
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        b1_ref_path = self.config.get("b1_reference_path")
+        if not b1_ref_path:
+            return None
+        p = Path(b1_ref_path)
+        if not p.is_absolute():
+            p = (repo_root / p).resolve()
+        if not p.is_file():
+            self.logger.warning("B1 reference path '%s' not found.", p)
+            return None
+
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                b1_data = json.load(f)
+
+            # Metadata validation
+            exp_id = b1_data.get("experiment_id")
+            split = b1_data.get("split")
+            data_status = b1_data.get("data_status")
+
+            if exp_id != "b1_degraded_validation_n126_gpu":
+                self.logger.warning(
+                    "B1 reference experiment_id '%s' differs from expected 'b1_degraded_validation_n126_gpu'",
+                    exp_id,
+                )
+            if split != "validation":
+                self.logger.warning("B1 reference split '%s' differs from expected 'validation'", split)
+            if data_status != "REAL_SROIE":
+                self.logger.warning("B1 reference data_status '%s' differs from expected 'REAL_SROIE'", data_status)
+
+            git_commit = b1_data.get("git_commit")
+            manifest_path = p.parent / "manifest.json"
+            if not git_commit and manifest_path.is_file():
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as mf:
+                        git_commit = json.load(mf).get("git_commit")
+                except Exception:
+                    pass
+
+            return {
+                "source": "frozen_b1_reference",
+                "experiment_id": exp_id,
+                "config_hash": b1_data.get("config_hash"),
+                "git_commit": git_commit or "UNKNOWN_COMMIT",
+                "path": str(p),
+                "conditions": b1_data.get("conditions", {}),
+            }
+        except Exception as e:
+            self.logger.warning("Could not load B1 reference from %s: %s", p, e)
+            return None
+
     def _setup_engines(self) -> Tuple[Any, Any, Any, SROIEAdapter]:
         """Instantiate single OCR engine, KIE engine, and dataset adapter for the entire run."""
         # 1. Dataset Adapter
@@ -146,6 +265,8 @@ class UnifiedExperimentRunner:
                 ocr_params["min_side_len"] = resize_cfg["min_side_len"]
             if "det_limit_type" in resize_cfg:
                 ocr_params["det_limit_type"] = resize_cfg["det_limit_type"]
+            if "execution_provider" in ocr_cfg:
+                ocr_params["execution_provider"] = ocr_cfg["execution_provider"]
 
         self.ocr_params = ocr_params
         ocr_engine = get_ocr_engine(ocr_engine_name, ocr_params)
@@ -265,43 +386,65 @@ class UnifiedExperimentRunner:
 
                         # Step B: Apply Degradation
                         t_st = _log_start("degradation")
+                        deg_params: Dict[str, Any] = {}
                         if cond.severity > 0 and cond.degradation_type != "none":
+                            deg_params = self._resolve_degradation_params(cond.degradation_type, cond.severity)
                             deg_spec = DegradationSpec(
                                 type=cond.degradation_type,
                                 severity=cond.severity,
+                                parameters=deg_params,
                                 seed=derived_seed,
                             )
                             deg_engine = get_degradation(cond.degradation_type)
                             current_image, _ = deg_engine.apply(raw_image, deg_spec)
                         else:
                             current_image = raw_image
+                        record["degradation_parameters"] = deg_params
                         _log_done("degradation", t_st)
 
                         # Step C: Apply Preprocessing
                         t_st = _log_start("preprocessing")
+                        prep_methods = []
+                        prep_params = {}
                         if cond.preprocessing_id not in ("none", "p0", "raw", ""):
-                            prep_methods = prep_pipelines_cfg.get(cond.preprocessing_id)
-                            if not prep_methods:
+                            prep_def = prep_pipelines_cfg.get(cond.preprocessing_id)
+                            if prep_def is None:
+                                for k, v in prep_pipelines_cfg.items():
+                                    if k.lower() == cond.preprocessing_id.lower():
+                                        prep_def = v
+                                        break
+                            if prep_def is None:
+                                prep_def = {}
+
+                            if isinstance(prep_def, dict):
+                                prep_methods = list(prep_def.get("steps", prep_def.get("methods", [])))
+                                prep_params = dict(prep_def.get("parameters", {}))
+                            elif isinstance(prep_def, list):
+                                prep_methods = list(prep_def)
+                                prep_params = {}
+                            elif isinstance(prep_def, str):
+                                prep_methods = [prep_def]
+                                prep_params = {}
+                            else:
                                 clean_name = (
                                     cond.preprocessing_id[2:]
                                     if cond.preprocessing_id.lower().startswith("p_")
                                     else cond.preprocessing_id
                                 )
                                 prep_methods = [clean_name]
-                            elif isinstance(prep_methods, str):
-                                prep_methods = [prep_methods]
+                                prep_params = {}
 
                             prep_spec = PreprocessingSpec(
                                 enabled=True,
                                 methods=prep_methods,
+                                parameters=prep_params,
                             )
-                            if len(prep_methods) == 1:
-                                prep_engine = get_preprocessor(prep_methods[0])
-                                current_image, _ = prep_engine.process(current_image, prep_spec)
-                            else:
-                                from src.preprocessing.pipeline import PreprocessingPipeline
-                                prep_pipeline = PreprocessingPipeline(steps=prep_methods)
-                                current_image, _ = prep_pipeline.process(current_image, prep_spec)
+                            from src.preprocessing.pipeline import PreprocessingPipeline
+                            prep_pipeline = PreprocessingPipeline(steps=prep_methods)
+                            current_image, _ = prep_pipeline.process(current_image, prep_spec)
+
+                        record["preprocessing_steps"] = prep_methods
+                        record["preprocessing_parameters"] = prep_params
                         _log_done("preprocessing", t_st)
 
                         # Save debug image if requested
@@ -419,6 +562,132 @@ class UnifiedExperimentRunner:
 
         overall_failure_rate = round(total_failed / total_requested, 4) if total_requested > 0 else 0.0
 
+        # 6.2 Compute Deltas Relative to B0 Reference
+        b0_ref = self._load_b0_reference()
+        ref_metrics: Optional[Dict[str, Any]] = None
+        ref_provenance: Optional[Dict[str, Any]] = None
+
+        if b0_ref is not None:
+            ref_metrics = b0_ref["metrics"]
+            ref_provenance = {
+                "source": "frozen_b0_reference",
+                "experiment_id": b0_ref.get("experiment_id"),
+                "config_hash": b0_ref.get("config_hash"),
+                "path": b0_ref.get("path"),
+            }
+        elif "D0_S0_P0" in condition_summaries:
+            ref_metrics = condition_summaries["D0_S0_P0"]
+            ref_provenance = {
+                "source": "current_run_control",
+                "condition_id": "D0_S0_P0",
+            }
+
+        if ref_metrics is not None:
+            ref_ocr = ref_metrics.get("ocr", {})
+            ref_kie = ref_metrics.get("kie", {})
+            b0_cer_raw = ref_ocr.get("cer_raw", {}).get("mean", 0.0)
+            b0_cer_norm = ref_ocr.get("cer_normalized", {}).get("mean", 0.0)
+            b0_wer_raw = ref_ocr.get("wer_raw", {}).get("mean", 0.0)
+            b0_wer_norm = ref_ocr.get("wer_normalized", {}).get("mean", 0.0)
+            b0_ned_raw = ref_ocr.get("char_ned_raw", {}).get("mean", 0.0)
+            b0_ned_norm = ref_ocr.get("char_ned_normalized", {}).get("mean", 0.0)
+            b0_macro_f1_raw = ref_kie.get("macro_f1_raw", 0.0)
+            b0_macro_f1_norm = ref_kie.get("macro_f1_normalized", 0.0)
+            b0_hmean = ref_kie.get("sroie_official_compatible", {}).get("entity_hmean", 0.0)
+            b0_doc_em_norm = ref_kie.get("normalized_doc_em_rate", 0.0)
+
+            for cid, c_sum in condition_summaries.items():
+                c_ocr = c_sum.get("ocr", {})
+                c_kie = c_sum.get("kie", {})
+
+                c_cer_raw = c_ocr.get("cer_raw", {}).get("mean", 0.0)
+                c_cer_norm = c_ocr.get("cer_normalized", {}).get("mean", 0.0)
+                c_wer_raw = c_ocr.get("wer_raw", {}).get("mean", 0.0)
+                c_wer_norm = c_ocr.get("wer_normalized", {}).get("mean", 0.0)
+                c_ned_raw = c_ocr.get("char_ned_raw", {}).get("mean", 0.0)
+                c_ned_norm = c_ocr.get("char_ned_normalized", {}).get("mean", 0.0)
+                c_macro_f1_raw = c_kie.get("macro_f1_raw", 0.0)
+                c_macro_f1_norm = c_kie.get("macro_f1_normalized", 0.0)
+                c_hmean = c_kie.get("sroie_official_compatible", {}).get("entity_hmean", 0.0)
+                c_doc_em_norm = c_kie.get("normalized_doc_em_rate", 0.0)
+
+                c_sum["delta_from_b0"] = {
+                    "delta_cer_raw": round(c_cer_raw - b0_cer_raw, 4),
+                    "delta_cer_normalized": round(c_cer_norm - b0_cer_norm, 4),
+                    "delta_wer_raw": round(c_wer_raw - b0_wer_raw, 4),
+                    "delta_wer_normalized": round(c_wer_norm - b0_wer_norm, 4),
+                    "delta_char_ned_raw": round(c_ned_raw - b0_ned_raw, 4),
+                    "delta_char_ned_normalized": round(c_ned_norm - b0_ned_norm, 4),
+                    "delta_macro_f1_raw": round(c_macro_f1_raw - b0_macro_f1_raw, 4),
+                    "delta_macro_f1_normalized": round(c_macro_f1_norm - b0_macro_f1_norm, 4),
+                    "delta_entity_hmean": round(c_hmean - b0_hmean, 4),
+                    "delta_normalized_doc_em": round(c_doc_em_norm - b0_doc_em_norm, 4),
+                    "b0_reference_provenance": ref_provenance,
+                }
+
+        # 6.3 Compute Recovery Relative to Matching B1 Reference Condition
+        b1_ref = self._load_b1_reference()
+        b1_conditions = b1_ref.get("conditions", {}) if b1_ref else {}
+        b1_provenance: Optional[Dict[str, Any]] = None
+        if b1_ref is not None:
+            b1_provenance = {
+                "source": "frozen_b1_reference",
+                "experiment_id": b1_ref.get("experiment_id"),
+                "config_hash": b1_ref.get("config_hash"),
+                "git_commit": b1_ref.get("git_commit"),
+                "path": b1_ref.get("path"),
+            }
+            for cid, c_sum in condition_summaries.items():
+                cond_info = c_sum.get("condition", {})
+                deg_type = cond_info.get("degradation_type", "none")
+                sev = cond_info.get("severity", 0)
+                d_code = DEGRADATION_CODE_MAP.get(deg_type, deg_type).upper()
+                matching_b1_id = f"{d_code}_S{sev}_P0"
+
+                if matching_b1_id in b1_conditions:
+                    b1_c = b1_conditions[matching_b1_id]
+                    b1_ocr = b1_c.get("ocr", {})
+                    b1_kie = b1_c.get("kie", {})
+
+                    b1_cer_raw = b1_ocr.get("cer_raw", {}).get("mean", 0.0)
+                    b1_cer_norm = b1_ocr.get("cer_normalized", {}).get("mean", 0.0)
+                    b1_wer_raw = b1_ocr.get("wer_raw", {}).get("mean", 0.0)
+                    b1_wer_norm = b1_ocr.get("wer_normalized", {}).get("mean", 0.0)
+                    b1_ned_raw = b1_ocr.get("char_ned_raw", {}).get("mean", 0.0)
+                    b1_ned_norm = b1_ocr.get("char_ned_normalized", {}).get("mean", 0.0)
+                    b1_macro_f1_raw = b1_kie.get("macro_f1_raw", 0.0)
+                    b1_macro_f1_norm = b1_kie.get("macro_f1_normalized", 0.0)
+                    b1_hmean = b1_kie.get("sroie_official_compatible", {}).get("entity_hmean", 0.0)
+                    b1_doc_em_norm = b1_kie.get("normalized_doc_em_rate", 0.0)
+
+                    c_ocr = c_sum.get("ocr", {})
+                    c_kie = c_sum.get("kie", {})
+                    c_cer_raw = c_ocr.get("cer_raw", {}).get("mean", 0.0)
+                    c_cer_norm = c_ocr.get("cer_normalized", {}).get("mean", 0.0)
+                    c_wer_raw = c_ocr.get("wer_raw", {}).get("mean", 0.0)
+                    c_wer_norm = c_ocr.get("wer_normalized", {}).get("mean", 0.0)
+                    c_ned_raw = c_ocr.get("char_ned_raw", {}).get("mean", 0.0)
+                    c_ned_norm = c_ocr.get("char_ned_normalized", {}).get("mean", 0.0)
+                    c_macro_f1_raw = c_kie.get("macro_f1_raw", 0.0)
+                    c_macro_f1_norm = c_kie.get("macro_f1_normalized", 0.0)
+                    c_hmean = c_kie.get("sroie_official_compatible", {}).get("entity_hmean", 0.0)
+                    c_doc_em_norm = c_kie.get("normalized_doc_em_rate", 0.0)
+
+                    c_sum["recovery_from_b1"] = {
+                        "reference_b1_condition_id": matching_b1_id,
+                        "delta_cer_raw": round(c_cer_raw - b1_cer_raw, 4),
+                        "delta_cer_normalized": round(c_cer_norm - b1_cer_norm, 4),
+                        "delta_wer_raw": round(c_wer_raw - b1_wer_raw, 4),
+                        "delta_wer_normalized": round(c_wer_norm - b1_wer_norm, 4),
+                        "delta_char_ned_raw": round(c_ned_raw - b1_ned_raw, 4),
+                        "delta_char_ned_normalized": round(c_ned_norm - b1_ned_norm, 4),
+                        "delta_macro_f1_raw": round(c_macro_f1_raw - b1_macro_f1_raw, 4),
+                        "delta_macro_f1_normalized": round(c_macro_f1_norm - b1_macro_f1_norm, 4),
+                        "delta_entity_hmean": round(c_hmean - b1_hmean, 4),
+                        "delta_normalized_doc_em": round(c_doc_em_norm - b1_doc_em_norm, 4),
+                        "b1_reference_provenance": b1_provenance,
+                    }
+
         # 7. Write summary.json
         summary_payload = {
             "title": "SROIE OCR/KIE Robustness Experiment Summary",
@@ -427,6 +696,9 @@ class UnifiedExperimentRunner:
             "data_status": data_status,
             "split": resolved_split,
             "smoke_mode": self.smoke_mode,
+            "execution_provider": getattr(ocr_engine, "execution_provider", "cpu"),
+            "b0_reference": ref_provenance,
+            "b1_reference": b1_provenance,
             "document_counts": {
                 "total_requested": total_requested,
                 "total_successful": total_successful,
@@ -443,6 +715,31 @@ class UnifiedExperimentRunner:
         # 8. Write manifest.json
         # NOTE: Runtime timestamps (start_time, end_time) are recorded as metadata only
         # and do not participate in deterministic configuration identity.
+        resolved_degradation_parameters: Dict[str, Any] = {}
+        for c in conditions:
+            if c.severity > 0 and c.degradation_type != "none":
+                resolved_degradation_parameters[c.condition_id] = self._resolve_degradation_params(
+                    c.degradation_type, c.severity
+                )
+
+        resolved_prep_pipelines: Dict[str, Any] = {}
+        for p_id, p_spec in prep_pipelines_cfg.items():
+            if isinstance(p_spec, dict):
+                resolved_prep_pipelines[p_id] = {
+                    "steps": p_spec.get("steps", p_spec.get("methods", [])),
+                    "parameters": p_spec.get("parameters", {}),
+                }
+            elif isinstance(p_spec, list):
+                resolved_prep_pipelines[p_id] = {
+                    "steps": p_spec,
+                    "parameters": {},
+                }
+            else:
+                resolved_prep_pipelines[p_id] = {
+                    "steps": [p_spec],
+                    "parameters": {},
+                }
+
         manifest_payload = {
             "experiment_id": self.experiment_id,
             "config_hash": self.config_hash,
@@ -460,11 +757,25 @@ class UnifiedExperimentRunner:
             "ocr_engine": {
                 "name": getattr(ocr_engine, "name", "rapidocr"),
                 "reading_order_tolerance": getattr(self, "ocr_params", {}).get("line_tolerance_factor", 0.5),
+                "execution_provider": getattr(ocr_engine, "execution_provider", "cpu"),
+                "onnxruntime_providers": getattr(ocr_engine, "get_model_manifest", lambda: {})().get("resolved", {}).get("detector", {}).get("providers", []),
             },
             "kie_engine": {
                 "name": getattr(kie_engine, "model_name", "rule_based"),
                 "fallback_largest_amount": self.config.get("kie", {}).get("engine", {}).get("fallback_largest_amount", False),
             },
+            "degradation_config": {
+                "path": str(self.config.get("degradation_config", "configs/degradation.yaml")),
+                "parameter_status": self.degradation_config.get("parameter_status", "unknown"),
+                "resolved_parameters": resolved_degradation_parameters,
+            },
+            "preprocessing_implementation": {
+                "name": "src.preprocessing",
+                "version": "1.0.0",
+            },
+            "preprocessing_pipelines": resolved_prep_pipelines,
+            "b0_reference": ref_provenance,
+            "b1_reference": b1_provenance,
             "conditions_evaluated": [c.condition_id for c in conditions],
             "runtime_metadata": {
                 "start_time": start_time_iso,
@@ -476,10 +787,20 @@ class UnifiedExperimentRunner:
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump(manifest_payload, f, indent=2, ensure_ascii=False)
 
-        # 9. Write resolved config.yaml
+        # 9. Write ocr_stack_manifest.json if available
+        if hasattr(ocr_engine, "get_model_manifest"):
+            try:
+                ocr_manifest_path = self.run_dir / "ocr_stack_manifest.json"
+                with open(ocr_manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(ocr_engine.get_model_manifest(), f, indent=2)
+            except Exception as e:
+                self.logger.warning("Could not export ocr_stack_manifest.json: %s", e)
+
+        # 10. Write resolved config.yaml
         config_out_path = self.run_dir / "config.yaml"
         with open(config_out_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(self.config, f, sort_keys=False)
+
 
         self.logger.info("Experiment run %s completed in %.2fs", self.experiment_id, total_duration_sec)
         self.logger.info("Artifacts saved to: %s", self.run_dir)

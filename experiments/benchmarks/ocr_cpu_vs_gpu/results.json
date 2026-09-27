@@ -1,0 +1,112 @@
+{
+  "benchmark_metadata": {
+    "timestamp": "2026-09-27 16:29:49",
+    "dataset_split": "validation",
+    "num_benchmark_documents": 10,
+    "num_warmup_documents": 2,
+    "document_ids": [
+      "X00016469619",
+      "X00016469669",
+      "X51005255805",
+      "X51005301659",
+      "X51005433533",
+      "X51005441398",
+      "X51005441402",
+      "X51005441407",
+      "X51005442346",
+      "X51005442378"
+    ],
+    "seed": 42
+  },
+  "session_initialization": {
+    "cpu_init_seconds": 0.676,
+    "gpu_init_seconds": 3.028
+  },
+  "latency_statistics": {
+    "cpu_ocr": {
+      "mean_ms": 2173.17,
+      "median_ms": 2083.82,
+      "std_ms": 550.53,
+      "min_ms": 1271.18,
+      "max_ms": 3422.92,
+      "p90_ms": 2748.93,
+      "p95_ms": 3085.92,
+      "p99_ms": 3355.52
+    },
+    "gpu_ocr": {
+      "mean_ms": 662.35,
+      "median_ms": 661.6,
+      "std_ms": 136.88,
+      "min_ms": 475.0,
+      "max_ms": 995.22,
+      "p90_ms": 770.62,
+      "p95_ms": 882.92,
+      "p99_ms": 972.76
+    },
+    "cpu_total": {
+      "mean_ms": 2174.15,
+      "median_ms": 2084.64,
+      "std_ms": 550.64,
+      "min_ms": 1271.69,
+      "max_ms": 3424.18,
+      "p90_ms": 2750.03,
+      "p95_ms": 3087.11,
+      "p99_ms": 3356.77
+    },
+    "gpu_total": {
+      "mean_ms": 662.92,
+      "median_ms": 662.15,
+      "std_ms": 137.03,
+      "min_ms": 475.42,
+      "max_ms": 996.2,
+      "p90_ms": 771.33,
+      "p95_ms": 883.76,
+      "p99_ms": 973.71
+    }
+  },
+  "speedup": {
+    "ocr_mean_speedup_x": 3.28,
+    "ocr_median_speedup_x": 3.15,
+    "total_mean_speedup_x": 3.28
+  },
+  "equivalence": {
+    "exact_text_match_rate": 0.7,
+    "mean_cer_vs_cpu": 0.0015,
+    "mean_wer_vs_cpu": 0.0042,
+    "mean_char_ned_similarity": 0.9985,
+    "token_count_differences": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "kie_field_match_rates": {
+      "company": 1.0,
+      "date": 1.0,
+      "address": 1.0,
+      "total": 1.0
+    },
+    "kie_overall_match_rate": 1.0
+  },
+  "hardware_monitoring": {
+    "gpu_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "gpu_total_vram_mb": 4096.0,
+    "gpu_initial_used_mb": 0.0,
+    "gpu_peak_used_mb": 950.0,
+    "gpu_net_allocated_mb": 950.0,
+    "vram_headroom_mb": 3146.0,
+    "vram_sufficient_4gb": true
+  },
+  "projections_b1": {
+    "total_evaluations": 4158,
+    "cpu_estimated_hours": 2.51,
+    "gpu_estimated_hours": 0.77,
+    "estimated_hours_saved": 1.74
+  }
+}

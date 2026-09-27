@@ -1,0 +1,11 @@
+dataset_root: data/SROIE2019
+kie_engine: rule_based
+num_documents: 10
+num_warmup: 2
+ocr_engine: rapidocr
+reading_order:
+  line_tolerance_factor: 0.5
+split: validation
+tested_providers:
+- cpu
+- cuda

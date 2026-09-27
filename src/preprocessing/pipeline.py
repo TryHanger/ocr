@@ -101,7 +101,14 @@ class PreprocessingPipeline(BasePreprocessor):
 
             primitive = get_preprocessor(key)
             # Create a focused spec for this primitive preserving parameters
-            step_params = spec.parameters.get(key, spec.parameters)
+            if key in spec.parameters:
+                step_params = spec.parameters[key]
+            elif method_name in spec.parameters:
+                step_params = spec.parameters[method_name]
+            elif len(method_names) == 1:
+                step_params = spec.parameters
+            else:
+                step_params = {}
             step_spec = PreprocessingSpec(
                 enabled=True,
                 methods=[key],

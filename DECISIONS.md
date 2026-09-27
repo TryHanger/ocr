@@ -302,3 +302,41 @@
   * Прямая передача GT-регионов или изображения в KIE-модель (нарушает чистоту каскадного эксперимента B0/B1/B2 и приводит к GT-leakage).
 * **Rationale:** Правилосодержащий baseline на чистом `OCRResult` обеспечивает 100% интерпретируемость, строгую изоляцию эффектов OCR и однозначную трассировку ошибок downstream-этапа к качеству текста OCR.
 * **Consequences:** Реализован и верифицирован базовый KIE-слой с фабрикой, правилами, двойной системой метрик и сквозным раннером. Кодовая база подготовлена к запуску полной экспериментальной матрицы.
+
+---
+
+## ADR-017: Transition to NVIDIA CUDA Execution Provider for Main Research Baseline Chain (B0_GPU -> B1_GPU)
+* **Status:** Accepted (2026-09-27)
+* **Decision:**
+  1. **Основной экспериментальный execution environment:** Перевести основной пайплайн исследования на `CUDAExecutionProvider` ONNX Runtime для ускорения вычислений на локальном GPU без привлечения облачных мощностей.
+  2. **Единая среда для B0 и B1:** Основная сравнительная экспериментальная цепочка фиксируется в едином execution environment:
+     $$\text{B0\_GPU} \longrightarrow \text{B1\_GPU}$$
+     Все дельты метрик $\Delta\text{metric}$ эксперимента B1 вычисляются строго относительно `B0_GPU` (`b0_clean_validation_n126_gpu`):
+     $$\Delta\text{metric} = \text{B1\_GPU\_condition\_metric} - \text{B0\_GPU\_metric}$$
+  3. **Сохранение исторического референса CPU:** Исходный чистый прогон `B0_CPU` (`b0_clean_validation_n126`) сохраняется в неизменном виде как отдельный historical/inter-provider baseline для анализа влияния среды исполнения.
+  4. **Аппаратно-программный стек:**
+     - GPU: NVIDIA GeForce RTX 3050 Laptop GPU (4 GB GDDR6 VRAM, TGP 60W, PCI ID 10de:25a2)
+     - NVIDIA Driver: 616.92
+     - CUDA: 12.6
+     - cuDNN: 9.x (libtorch 2.6 DLLs)
+     - Python: 3.11.6
+     - ONNX Runtime: 1.20.0 (`onnxruntime-gpu`)
+     - RapidOCR: 3.9.2 (модели PP-OCRv6 small)
+  5. **Fail-fast валидация провайдера:** Запрещен любой неявный откат (silent fallback) на CPU. При инициализации `RapidOCREngine(execution_provider="cuda")` проверяется, что первичным провайдером для всех трех компонентов (Detector, Recognizer, Classifier) является `CUDAExecutionProvider`. При невозможности инициализации немедленно генерируется `RuntimeError`.
+  6. **Результаты валидации эквивалентности B0 CPU vs B0 GPU ($N=126$):**
+     - Exact Normalized Text Match: 126 / 126 (100.00%)
+     - Inter-Provider Mean CER: 0.0000 (0.00%)
+     - Inter-Provider Mean WER: 0.0000 (0.00%)
+     - Inter-Provider Mean Char-NED: 1.0000 (100.00%)
+     - KIE Macro F1: CPU 0.4762 vs GPU 0.4782 ($\Delta = +0.0020$ за счет bootstrap вариации при идентичных 241 извлеченных сущностях)
+     - KIE Field Match Rates: `company` 100%, `date` 100%, `address` 100%, `total` 100%
+     - Overall KIE Agreement: 100.00%
+     - Измеренное ускорение инференса OCR: $3.28\times$ (задержка снизилась с 2173 мс до 662 мс на документ).
+     - Потребление VRAM: пиковое 950 МБ из доступных 4096 МБ (свободный запас 3146 МБ, исключающий OOM).
+* **Context:** Полный матричный эксперимент B1 содержит 33 условия $\times$ 126 документов = 4 158 оценок. На CPU прогон занимает более 2.5 часов, тогда как на локальном GPU NVIDIA RTX 3050 время составляет ~46 минут. Для соблюдения научной строгости недопустимо сравнивать GPU-деградации с CPU-контролем, поэтому B0 был полностью пересчитан на GPU в идентичном окружении.
+* **Alternatives:**
+  * Запуск B1 на CPU (длительное время выполнения ~2.5 ч, риск прерывания).
+  * Сравнение B1_GPU со старым B0_CPU (методологическая ошибка межплатформенного сравнения).
+* **Rationale:** Переход на схему B0_GPU $\to$ B1_GPU гарантирует 100% однородность среды исполнения в рамках основного исследования, сохраняя полную воспроизводимость и сокращая общее время эксперимента более чем в 3 раза.
+* **Consequences:** Репозиторий оснащен конфигурациями `configs/b0_baseline_gpu.yaml` и `configs/b1_baseline_gpu.yaml`, поддержкой флага `--execution-provider` и валидированным B0 GPU baseline.
+

@@ -2,31 +2,143 @@
 
 ## Active
 
-- **TASK-013 — Real-Data Clean Baseline B0 on SROIE Validation Split ($N=126$)**
+*Нет активных задач.*
+
+## Completed
+
+- **TASK-015 — Real-Data Preprocessing Robustness B2 Matrix ($N=126$) on GPU**
+  - *Дата завершения:* 2026-09-28
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Проведен полномасштабный исследовательский эксперимент $B_2$ по исследованию устойчивости и потенциала восстановления (recovery) OCR и downstream KIE при применении фиксированных пайплайнов предобработки после деградаций на валидационном сплите SROIE ($N=126$, seed 42) в целевом аппаратном окружении `CUDAExecutionProvider` (NVIDIA RTX 3050 Laptop GPU, 4 GB VRAM) в строгом соответствии с ADR-011, ADR-012, ADR-017 и ADR-018:
+    1. *Матрица и целостность выполнения:*
+       - 129 экспериментальных условий: 1 контрольное условие ($D_0\_S_0\_P_0$) + 8 деградаций ($D_1$–$D_8$) $\times$ 4 уровня severity ($S_1$–$S_4$) $\times$ 4 зафиксированных пайплайна предобработки ($P_{\text{minimal}}$, $P_{\text{contrast}}$, $P_{\text{standard}}$, $P_{\text{binarization}}$) = 128 условий $B_2$.
+       - Условия $P_0$ для $B_1$ не перегенерировались (`include_b1: false`), а взяты из внешнего замороженного эталона `b1_degraded_validation_n126_gpu` (commit `0c6c1a2b`).
+       - Общий объем: $129 \times 126 = 16\,254$ сквозных оценок конвейера `Image -> Degradation -> Preprocessing -> OCR (RapidOCR PP-OCRv6, CUDA) -> Rule-Based KIE -> Evaluation`.
+       - Учет сбоев: $16\,254$ успешно завершенных оценок, $0$ отказов (`failure_rate: 0.00%`). Время прогона: $23970.15$ с (~6.66 ч).
+       - Изоляция тестового сплита: сплит `test` ($N=347$) строго закрыт guard-флагом и не использовался.
+    2. *Верификация контрольного условия ($D_0\_S_0\_P_0$ vs $B_0\_GPU$):*
+       - Контрольное условие $D_0\_S_0\_P_0$ внутри $B_2$ численно идентично замороженному baseline $B_0\_GPU$ (`b0_clean_validation_n126_gpu`) с нулевым отклонением по всем метрикам ($\Delta\text{CER} = 0.0000$, $\Delta\text{WER} = 0.0000$, $\Delta\text{NED} = 0.0000$, $\Delta F_1 = 0.0000$, $\Delta\text{Hmean} = 0.0000$, $\Delta\text{DocEM} = 0.0000$).
+    3. *Агрегированные результаты по пайплайнам предобработки:*
+       - `p_standard_receipt_enhancement` (deskew $\to$ clahe $\to$ denoise):
+         - Mean $\Delta\text{CER}_{\text{recovery}} = -0.0103$, улучшил CER в 15 из 32 условий.
+         - Показал выраженное восстановление на деградации поворота $D_6$: на $S_1$ $\Delta\text{CER} = -0.0119$, на $S_2$ $\Delta\text{CER} = -0.0969$ ($\Delta F_1 = +0.0278$), на $S_3$ $\Delta\text{CER} = -0.1539$ ($\Delta F_1 = +0.0496$, возврат CER с 0.4812 до 0.3273).
+         - Граничный эффект: на $S_4$ (угол 25°) превышен максимальный лимит `max_angle=15.0°`, поэтому поворот не скомпенсирован ($\Delta\text{CER} = -0.0017$).
+         - На деградации перспективы $D_7$: средний $\Delta\text{CER}_{\text{recovery}} = -0.0225$.
+       - `p_contrast_enhancement` (grayscale $\to$ clahe):
+         - Mean $\Delta\text{CER}_{\text{recovery}} = -0.0021$, улучшил CER в 15 из 32 условий.
+         - Эффективен против теней $D_8$: на $S_4$ $\Delta\text{CER}_{\text{recovery}} = -0.0272$ (снижение CER с 0.3497 до 0.3225), $\Delta F_1 = +0.0040$.
+       - `p_minimal_cleanup` (grayscale $\to$ median denoise ksize=3):
+         - Mean $\Delta\text{CER}_{\text{recovery}} = +0.0038$, mean $\Delta F_{1,\text{recovery}} = -0.0061$.
+         - В основном имеет нейтральный или слабоотрицательный эффект из-за сглаживания тонких штрихов шрифта на чеках.
+       - `p_aggressive_binarization` (grayscale $\to$ adaptive gaussian thresholding):
+         - Mean $\Delta\text{CER}_{\text{recovery}} = +0.0886$, ухудшил CER в 31 из 32 условий; ухудшил Macro $F_1$ во всех 32 условиях (mean $\Delta F_1 = -0.0929$).
+         - Эмпирически подтверждена деструктивность жесткой бинаризации для нейросетевых OCR-распознавателей (разрушение антиалиасинга и целостности штрихов).
+    4. *Артефакты эксперимента:*
+       - `experiments/runs/b2_preprocessing_validation_n126_gpu/summary.json`
+       - `experiments/runs/b2_preprocessing_validation_n126_gpu/manifest.json`
+       - `experiments/runs/b2_preprocessing_validation_n126_gpu/per_document.jsonl` (16 254 записи)
+       - `experiments/runs/b2_preprocessing_validation_n126_gpu/b2_conditions_detailed.csv` (129 строк)
+
+- **TASK-014 — Real-Data Degradation Baseline B1 on SROIE Validation Split ($N=126$) on GPU**
   - *Дата завершения:* 2026-09-27
   - *Статус:* Завершена успешно (PASS).
-  - *Результат:* Получена фундаментальная контрольная точка исследования — чистый бейзлайн $B_0$ (`D0_S0_P0`) на канонической валидационной выборке SROIE ($N=126$, seed 42) в соответствии с ADR-011, ADR-012, ADR-013, ADR-015 и ADR-016:
-    1. *Канонический сквозной конвейер:* Выполнен пайплайн `SROIE Image -> D0 (identity) -> P0 (identity) -> RapidOCR (PP-OCRv6 small) -> Rule-Based KIE -> Evaluation`. Исходные изображения подавались без синтетических деградаций и без предобработки (`np.array_equal` подтверждён регрессионным тестом).
-    2. *Строгая изоляция Ground Truth (Zero GT Leakage):* Никакие эталонные данные (боксы, транскрипции, сущности) не передавались в OCR и KIE. GT загружался строго на этапе вычисления метрик.
-    3. *Учет сбоев (Failure Accounting):* 126 из 126 документов обработаны успешно (`success: 126, failed: 0, failure_rate: 0.00%`).
-    4. *Метрики OCR (N=126, bootstrap 95% CI, 1000 итераций):*
-       - CER Raw: $0.3518$ (CI: $[0.3326, 0.3723]$, median: $0.3756$)
-       - CER Normalized: $0.3203$ (CI: $[0.2994, 0.3421]$, median: $0.3397$)
-       - WER Raw: $0.4833$ (CI: $[0.4561, 0.5087]$, median: $0.4903$)
-       - WER Normalized: $0.4833$ (CI: $[0.4572, 0.5071]$, median: $0.4903$)
-       - Character-NED Raw: $0.6503$ (CI: $[0.6310, 0.6726]$, median: $0.6270$)
-       - Character-NED Normalized: $0.6816$ (CI: $[0.6592, 0.7019]$, median: $0.6629$)
-    5. *Метрики KIE (N=126):*
-       - Поле `company`: Precision Raw/Norm $0.4206 / 0.4365$, Recall Raw/Norm $0.4206 / 0.4365$, F1 Raw/Norm $0.4206 / 0.4365$
-       - Поле `date`: Precision Raw/Norm $0.9115 / 1.0000$, Recall Raw/Norm $0.8175 / 0.8968$, F1 Raw/Norm $0.8619 / 0.9456$
-       - Поле `address`: Precision Raw/Norm $0.0000 / 0.0080$, Recall Raw/Norm $0.0000 / 0.0079$, F1 Raw/Norm $0.0000 / 0.0079$
-       - Поле `total`: Precision Raw/Norm $0.6500 / 0.7100$, Recall Raw/Norm $0.5159 / 0.5635$, F1 Raw/Norm $0.5752 / 0.6283$
-       - Macro F1: Raw $0.4644$, Normalized $0.4762$ (CI: $[0.4425, 0.5060]$)
-       - Macro Precision / Recall: Normalized Precision $0.5386$, Normalized Recall $0.4762$
-       - Document Exact Match: Raw Doc-EM $0.0000$, Normalized Doc-EM $0.0000$
-       - SROIE Official Task-3 Entity Micro: Precision $0.5172$, Recall $0.4762$, Hmean (F1) $0.4959$ (TP: 240, Pred: 464, GT: 504)
-    6. *Артефакты:* Сформированы в `experiments/runs/b0_clean_validation_n126/` (`config.yaml`, `manifest.json`, `per_document.jsonl`, `summary.json`, `logs/run.log`). Хеш конфигурации: `97c6bfd0d9b1...`, статус данных: `REAL_SROIE`.
-    7. *Тестирование:* Добавлены 3 регрессионных теста (`test_b0_original_image_invariant`, `test_b0_aggregate_condition_records_analytical_prf`, `test_run_experiment_cli_b0_and_data_root`). Полный набор тестов: 399 passed, 0 failed, 92% coverage.
+  - *Результат:* Проведен полномасштабный фундаментальный исследовательский эксперимент $B_1$ по измерению деградационной устойчивости OCR и downstream KIE на каноническом валидационном сплите SROIE ($N=126$, seed 42) в целевом аппаратном окружении `CUDAExecutionProvider` (NVIDIA RTX 3050 Laptop GPU, 4 GB VRAM) в строгом соответствии с ADR-011, ADR-012 и ADR-017:
+    1. *Матрица и целостность выполнения:*
+       - 33 экспериментальных условия: 8 деградаций ($D_1$–$D_8$) $\times$ 4 уровня severity ($S_1$–$S_4$) $\times$ $P_0$ (32 условия) + 1 контрольное условие ($D_0\_S_0\_P_0$).
+       - Общий объем: $33 \times 126 = 4\,158$ сквозных оценок конвейера `Image -> Degradation -> OCR (RapidOCR PP-OCRv6, CUDA) -> Rule-Based KIE -> Evaluation`.
+       - Учет сбоев: $4\,158$ успешно завершенных прогонов, $0$ отказов (`failure_rate: 0.00%`). Общее время: $6842.44$ с (~1.9 ч).
+       - Изоляция тестового сплита: сплит `test` ($N=347$) строго закрыт guard-флагом и не затрагивался.
+    2. *Верификация контрольного условия ($D_0\_S_0\_P_0$ vs $B_0\_GPU$):*
+       - Контрольное условие $D_0\_S_0\_P_0$ точно воспроизвело замороженный baseline $B_0\_GPU$ (`b0_clean_validation_n126_gpu`) с нулевым отклонением по всем метрикам:
+         - $\Delta\text{CER} = +0.000000$ ($\text{CER} = 0.3203$)
+         - $\Delta\text{WER} = +0.000000$ ($\text{WER} = 0.4831$)
+         - $\Delta\text{Char-NED} = +0.000000$ ($\text{NED} = 0.6816$)
+         - $\Delta\text{Macro } F_1 = +0.000000$ ($\text{Macro } F_1 = 0.4782$)
+         - $\Delta\text{Entity Hmean} = +0.000000$ ($\text{Hmean} = 0.4979$)
+    3. *Итоговая матрица метрик B1 (33 условия):*
+       | Условие | Деградация | Sev | CER (norm) | $\Delta$CER | WER (norm) | Char-NED | Macro $F_1$ | $\Delta F_1$ | Entity Hmean | $\Delta$Hmean |
+       |---|---|---|---|---|---|---|---|---|---|---|
+       | **D0_S0_P0** | **Control (B0)** | **S0** | **0.3203** | **+0.0000** | **0.4831** | **0.6816** | **0.4782** | **+0.0000** | **0.4979** | **+0.0000** |
+       | D1_S1_P0 | Gaussian Blur | S1 | 0.3205 | +0.0002 | 0.4822 | 0.6819 | 0.4861 | +0.0079 | 0.5052 | +0.0073 |
+       | D1_S2_P0 | Gaussian Blur | S2 | 0.3286 | +0.0083 | 0.5062 | 0.6731 | 0.4702 | -0.0080 | 0.4876 | -0.0103 |
+       | D1_S3_P0 | Gaussian Blur | S3 | 0.5203 | +0.2000 | 0.6938 | 0.4806 | 0.3472 | -0.1310 | 0.3968 | -0.1011 |
+       | D1_S4_P0 | Gaussian Blur | S4 | 0.8608 | +0.5405 | 0.9029 | 0.1395 | 0.1171 | -0.3611 | 0.1850 | -0.3129 |
+       | D2_S1_P0 | Motion Blur | S1 | 0.3335 | +0.0132 | 0.5276 | 0.6678 | 0.4583 | -0.0199 | 0.4772 | -0.0207 |
+       | D2_S2_P0 | Motion Blur | S2 | 0.3858 | +0.0655 | 0.6169 | 0.6150 | 0.4206 | -0.0576 | 0.4412 | -0.0567 |
+       | D2_S3_P0 | Motion Blur | S3 | 0.6321 | +0.3118 | 0.8602 | 0.3681 | 0.1726 | -0.3056 | 0.2167 | -0.2812 |
+       | D2_S4_P0 | Motion Blur | S4 | 0.8027 | +0.4824 | 0.9320 | 0.1973 | 0.0853 | -0.3929 | 0.1243 | -0.3736 |
+       | D3_S1_P0 | Gaussian Noise | S1 | 0.3204 | +0.0001 | 0.4713 | 0.6820 | 0.4980 | +0.0198 | 0.5138 | +0.0159 |
+       | D3_S2_P0 | Gaussian Noise | S2 | 0.3259 | +0.0056 | 0.4872 | 0.6769 | 0.4802 | +0.0020 | 0.4949 | -0.0030 |
+       | D3_S3_P0 | Gaussian Noise | S3 | 0.3569 | +0.0366 | 0.5409 | 0.6453 | 0.4504 | -0.0278 | 0.4734 | -0.0245 |
+       | D3_S4_P0 | Gaussian Noise | S4 | 0.4134 | +0.0931 | 0.6150 | 0.5888 | 0.4286 | -0.0496 | 0.4576 | -0.0403 |
+       | D4_S1_P0 | JPEG Compression | S1 | 0.3215 | +0.0012 | 0.4879 | 0.6803 | 0.4821 | +0.0039 | 0.5020 | +0.0041 |
+       | D4_S2_P0 | JPEG Compression | S2 | 0.3233 | +0.0030 | 0.4966 | 0.6783 | 0.4663 | -0.0119 | 0.4851 | -0.0128 |
+       | D4_S3_P0 | JPEG Compression | S3 | 0.3237 | +0.0034 | 0.4989 | 0.6781 | 0.4722 | -0.0060 | 0.4928 | -0.0051 |
+       | D4_S4_P0 | JPEG Compression | S4 | 0.3378 | +0.0175 | 0.5368 | 0.6640 | 0.4583 | -0.0199 | 0.4797 | -0.0182 |
+       | D5_S1_P0 | Downsampling | S1 | 0.3214 | +0.0011 | 0.4844 | 0.6811 | 0.4802 | +0.0020 | 0.4990 | +0.0011 |
+       | D5_S2_P0 | Downsampling | S2 | 0.3213 | +0.0010 | 0.4862 | 0.6807 | 0.4702 | -0.0080 | 0.4907 | -0.0072 |
+       | D5_S3_P0 | Downsampling | S3 | 0.3358 | +0.0155 | 0.5239 | 0.6659 | 0.4583 | -0.0199 | 0.4787 | -0.0192 |
+       | D5_S4_P0 | Downsampling | S4 | 0.4498 | +0.1295 | 0.6978 | 0.5512 | 0.3056 | -0.1726 | 0.3434 | -0.1545 |
+       | D6_S1_P0 | Rotation | S1 | 0.3314 | +0.0111 | 0.4903 | 0.6709 | 0.4762 | -0.0020 | 0.4948 | -0.0031 |
+       | D6_S2_P0 | Rotation | S2 | 0.4180 | +0.0977 | 0.5771 | 0.5846 | 0.4385 | -0.0397 | 0.4604 | -0.0375 |
+       | D6_S3_P0 | Rotation | S3 | 0.4812 | +0.1609 | 0.6450 | 0.5210 | 0.4048 | -0.0734 | 0.4224 | -0.0755 |
+       | D6_S4_P0 | Rotation | S4 | 0.5577 | +0.2374 | 0.7148 | 0.4436 | 0.3452 | -0.1330 | 0.3651 | -0.1328 |
+       | D7_S1_P0 | Perspective | S1 | 0.3337 | +0.0134 | 0.4940 | 0.6687 | 0.4802 | +0.0020 | 0.5011 | +0.0032 |
+       | D7_S2_P0 | Perspective | S2 | 0.3761 | +0.0558 | 0.5343 | 0.6262 | 0.4464 | -0.0318 | 0.4663 | -0.0316 |
+       | D7_S3_P0 | Perspective | S3 | 0.4320 | +0.1117 | 0.5878 | 0.5701 | 0.4385 | -0.0397 | 0.4585 | -0.0394 |
+       | D7_S4_P0 | Perspective | S4 | 0.4960 | +0.1757 | 0.6566 | 0.5058 | 0.4067 | -0.0715 | 0.4271 | -0.0708 |
+       | D8_S1_P0 | Shadow | S1 | 0.3200 | -0.0003 | 0.4828 | 0.6820 | 0.4841 | +0.0059 | 0.5026 | +0.0047 |
+       | D8_S2_P0 | Shadow | S2 | 0.3226 | +0.0023 | 0.4916 | 0.6793 | 0.4841 | +0.0059 | 0.5036 | +0.0057 |
+       | D8_S3_P0 | Shadow | S3 | 0.3217 | +0.0014 | 0.4880 | 0.6799 | 0.4841 | +0.0059 | 0.5010 | +0.0031 |
+       | D8_S4_P0 | Shadow | S4 | 0.3497 | +0.0294 | 0.5213 | 0.6518 | 0.4762 | -0.0020 | 0.4948 | -0.0031 |
+    4. *Упорядочение экспериментальных условий при Severity S4 по изменению метрик относительно $B_0$:*
+       - **По возрастанию величины $\Delta\text{CER}$ (увеличение посимвольной ошибки распознавания):**
+         1. $D_1$ Gaussian Blur: $\Delta\text{CER} = +0.5405$ ($\text{CER} = 0.8608$, $\text{NED} = 0.1395$)
+         2. $D_2$ Motion Blur: $\Delta\text{CER} = +0.4824$ ($\text{CER} = 0.8027$, $\text{NED} = 0.1973$)
+         3. $D_6$ Rotation: $\Delta\text{CER} = +0.2374$ ($\text{CER} = 0.5577$, $\text{NED} = 0.4436$)
+         4. $D_7$ Perspective: $\Delta\text{CER} = +0.1757$ ($\text{CER} = 0.4960$, $\text{NED} = 0.5058$)
+         5. $D_5$ Downsampling: $\Delta\text{CER} = +0.1295$ ($\text{CER} = 0.4498$, $\text{NED} = 0.5512$)
+         6. $D_3$ Gaussian Noise: $\Delta\text{CER} = +0.0931$ ($\text{CER} = 0.4134$, $\text{NED} = 0.5888$)
+         7. $D_8$ Shadow: $\Delta\text{CER} = +0.0294$ ($\text{CER} = 0.3497$, $\text{NED} = 0.6518$)
+         8. $D_4$ JPEG Compression: $\Delta\text{CER} = +0.0175$ ($\text{CER} = 0.3378$, $\text{NED} = 0.6640$)
+       - **По величине $\Delta\text{Macro } F_1$ (убывание пополевого $F_1$):**
+         1. $D_2$ Motion Blur: $\Delta F_1 = -0.3929$ ($F_1 = 0.0853$, $\text{Hmean} = 0.1243$)
+         2. $D_1$ Gaussian Blur: $\Delta F_1 = -0.3611$ ($F_1 = 0.1171$, $\text{Hmean} = 0.1850$)
+         3. $D_5$ Downsampling: $\Delta F_1 = -0.1726$ ($F_1 = 0.3056$, $\text{Hmean} = 0.3434$)
+         4. $D_6$ Rotation: $\Delta F_1 = -0.1330$ ($F_1 = 0.3452$, $\text{Hmean} = 0.3651$)
+         5. $D_7$ Perspective: $\Delta F_1 = -0.0715$ ($F_1 = 0.4067$, $\text{Hmean} = 0.4271$)
+         6. $D_3$ Gaussian Noise: $\Delta F_1 = -0.0496$ ($F_1 = 0.4286$, $\text{Hmean} = 0.4576$)
+         7. $D_4$ JPEG Compression: $\Delta F_1 = -0.0199$ ($F_1 = 0.4583$, $\text{Hmean} = 0.4797$)
+         8. $D_8$ Shadow: $\Delta F_1 = -0.0020$ ($F_1 = 0.4762$, $\text{Hmean} = 0.4948$)
+    5. *Эмпирические показатели извлечения сущностей KIE при S4:*
+       - **Date:** сохраняет наивысшие значения $F_1$ среди 4 сущностей при $D_3, D_4, D_6, D_7, D_8$ ($F_1 \in [0.86, 0.97]$); при $D_1$ и $D_2$ зафиксировано снижение до $F_1 = 0.3311$ и $0.2083$ соответственно.
+       - **Total:** принимает значения $F_1 \in [0.61, 0.62]$ при $D_3, D_4, D_8$ и более низкие значения при $D_6$ ($0.3192$), $D_7$ ($0.4240$), $D_1$ ($0.2119$) и $D_2$ ($0.2266$).
+       - **Company:** принимает значения $F_1 \in [0.38, 0.41]$ при $D_3, D_4, D_7, D_8$, $0.3267$ при $D_5$, $0.2063$ при $D_6$, $0.1758$ при $D_1$ и $0.1005$ при $D_2$.
+       - **Address:** во всех условиях сохраняет значения $F_1 \le 0.026$ (исходный уровень в $B_0$: $F_1 = 0.0079$).
+    6. *Артефакты:* Сохранены в `experiments/runs/b1_degraded_validation_n126_gpu/` (`summary.json`, `manifest.json`, `per_document.jsonl` — 4,158 строк, `ocr_stack_manifest.json`, `config.yaml`, `b1_conditions_detailed.csv`). Все 406 тестов проекта пройдены успешно (100% pass).
+
+
+- **TASK-013-GPU — Real-Data Clean Baseline B0 on SROIE Validation Split ($N=126$) on GPU**
+  - *Дата завершения:* 2026-09-27
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Сформирована фундаментальная контрольная точка исследования в целевом аппаратном окружении `CUDAExecutionProvider` (NVIDIA RTX 3050 Laptop GPU, 4 GB VRAM) — чистый бейзлайн $B_0$ (`D0_S0_P0`) на валидационном сплите SROIE ($N=126$, seed 42) в соответствии с ADR-017:
+    1. *Канонический сквозной конвейер на GPU:* Выполнен пайплайн `SROIE Image -> D0 (identity) -> P0 (identity) -> RapidOCR (PP-OCRv6 small, CUDAExecutionProvider) -> Rule-Based KIE -> Evaluation`.
+    2. *Учет сбоев:* 126 из 126 документов обработаны успешно (`success: 126, failed: 0, failure_rate: 0.00%`). Время выполнения: 172.48 с (~2.8 мин).
+    3. *Метрики OCR (N=126, bootstrap 95% CI):*
+       - CER Normalized: $0.3203$ (CI: $[0.2993, 0.3421]$, median: $0.3397$) — идентично CPU ($0.3203$)
+       - WER Normalized: $0.4831$ (CI: $[0.4570, 0.5071]$, median: $0.4903$) — $\Delta = -0.0002$ относительно CPU
+       - Character-NED Normalized: $0.6816$ (CI: $[0.6592, 0.7019]$, median: $0.6629$) — идентично CPU ($0.6816$)
+    4. *Метрики KIE (N=126):*
+       - Macro F1 Normalized: $0.4782$ (CI: $[0.4444, 0.5079]$)
+       - Entity Hmean (Task-3 Micro): $0.4979$ (241 извлеченная сущность из 504 — идентично CPU)
+       - Совпадение KIE-полей с CPU B0: 100% (`company`: 126/126, `date`: 126/126, `address`: 126/126, `total`: 126/126)
+    5. *Сравнение с B0 CPU:* На всех 126 документах подтверждена 100% эквивалентность нормализованного текста (126/126 exact matches, mean CER = 0.0000, mean WER = 0.0000, mean NED = 1.0000). Артефакт сравнения: `experiments/benchmarks/b0_cpu_vs_gpu_comparison.json`.
+    6. *Артефакты B0 GPU:* Сформированы в `experiments/runs/b0_clean_validation_n126_gpu/` (`config.yaml`, `manifest.json`, `ocr_stack_manifest.json`, `per_document.jsonl`, `summary.json`, `logs/run.log`). Хеш конфигурации: `63bf882aa172...`, статус данных: `REAL_SROIE`.
+
+- **TASK-013 — Real-Data Clean Baseline B0 on SROIE Validation Split ($N=126$) (CPU)**
+  - *Дата завершения:* 2026-09-27
+  - *Статус:* Завершена успешно (PASS). Сохранен как исторический референс CPU.
+
 
 - **TASK-012 — Real-Data Degradation Calibration on Validation Split ($N=126$)**
   - *Дата завершения:* 2026-09-27

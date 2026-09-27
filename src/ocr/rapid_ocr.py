@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import os
 from pathlib import Path
+import platform
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -13,6 +15,20 @@ import numpy as np
 
 from src.core.schemas import BoundingBox, OCRToken
 from src.ocr.base import BaseOCREnginePrimitive
+
+
+def _setup_cuda_dlls() -> None:
+    """Ensure Windows dynamic link loader finds cuDNN and CUDA DLLs from torch or toolkit."""
+    if platform.system() == "Windows":
+        try:
+            import torch
+            torch_lib = Path(torch.__file__).parent / "lib"
+            if torch_lib.exists():
+                os.add_dll_directory(str(torch_lib))
+                os.environ["PATH"] = str(torch_lib) + os.pathsep + os.environ.get("PATH", "")
+        except ImportError:
+            pass
+
 
 
 # Expected model filenames and cryptographic SHA256 hashes for reproducibility lock
@@ -61,6 +77,7 @@ class RapidOCREngine(BaseOCREnginePrimitive):
         min_side_len: int = 30,
         det_limit_side_len: int = 736,
         det_limit_type: str = "min",
+        execution_provider: str = "cpu",
         **kwargs: Any,
     ) -> None:
         super().__init__(line_tolerance_factor=line_tolerance_factor)
@@ -72,6 +89,13 @@ class RapidOCREngine(BaseOCREnginePrimitive):
         self.min_side_len = int(min_side_len)
         self.det_limit_side_len = int(det_limit_side_len)
         self.det_limit_type = str(det_limit_type)
+        ep_clean = str(execution_provider).strip().lower()
+        if ep_clean not in ("cpu", "cuda"):
+            raise ValueError(
+                f"Unsupported execution_provider: '{execution_provider}'. "
+                f"Supported providers: ['cpu', 'cuda']"
+            )
+        self.execution_provider = ep_clean
         self.custom_kwargs = kwargs
         self.model_name = "RapidOCR"
         self.model_version = "3.9.2 (PP-OCRv6 small)"
@@ -97,10 +121,51 @@ class RapidOCREngine(BaseOCREnginePrimitive):
             "Det.limit_side_len": self.det_limit_side_len,
             "Det.limit_type": self.det_limit_type,
         }
+        if self.execution_provider == "cuda":
+            _setup_cuda_dlls()
+            params["EngineConfig.onnxruntime.use_cuda"] = True
+        else:
+            params["EngineConfig.onnxruntime.use_cuda"] = False
+
         for k, v in kwargs.items():
             params[k] = v
 
         self._engine = RapidOCR(params=params)
+
+        # Fail-fast validation: verify ONNX Runtime didn't silently fall back or misconfigure
+        det_sess = getattr(self._engine.text_det, "session", None)
+        det_ort = getattr(det_sess, "session", None)
+        rec_sess = getattr(self._engine.text_rec, "session", None)
+        rec_ort = getattr(rec_sess, "session", None)
+
+        det_providers = det_ort.get_providers() if det_ort else []
+        rec_providers = rec_ort.get_providers() if rec_ort else []
+        cls_providers = []
+        if self.use_cls:
+            cls_sess = getattr(self._engine.text_cls, "session", None)
+            cls_ort = getattr(cls_sess, "session", None)
+            cls_providers = cls_ort.get_providers() if cls_ort else []
+
+        if self.execution_provider == "cuda":
+            fallback_errors = []
+            if not det_providers or det_providers[0] != "CUDAExecutionProvider":
+                fallback_errors.append(f"Detector (active: {det_providers})")
+            if not rec_providers or rec_providers[0] != "CUDAExecutionProvider":
+                fallback_errors.append(f"Recognizer (active: {rec_providers})")
+            if self.use_cls and (not cls_providers or cls_providers[0] != "CUDAExecutionProvider"):
+                fallback_errors.append(f"Classifier (active: {cls_providers})")
+            if fallback_errors:
+                raise RuntimeError(
+                    f"Requested execution_provider='cuda', but ONNX Runtime failed to activate "
+                    f"CUDAExecutionProvider as primary provider (silent fallback detected). "
+                    f"Failures: {', '.join(fallback_errors)}"
+                )
+        elif self.execution_provider == "cpu":
+            if det_providers and det_providers[0] != "CPUExecutionProvider":
+                raise RuntimeError(
+                    f"Requested execution_provider='cpu', but detector primary provider is {det_providers[0]}"
+                )
+
 
     def _resolve_session_model(self, component: Any) -> Dict[str, Any]:
         """Dynamically inspect an active RapidOCR component to extract actual model path and hash.
@@ -170,12 +235,14 @@ class RapidOCREngine(BaseOCREnginePrimitive):
             else {"enabled": False, "comment": "Classifier disabled via configuration"}
         )
 
+        expected_ep = "CUDAExecutionProvider" if self.execution_provider == "cuda" else "CPUExecutionProvider"
         environment = {
             "platform": sys.platform,
             "python_version": sys.version.split()[0],
             "rapidocr_version": rap_version,
             "onnxruntime_version": ort_version,
-            "execution_provider": "CPUExecutionProvider",
+            "execution_provider": expected_ep,
+            "configured_provider": self.execution_provider,
             "opencv_version": cv2.__version__,
             "numpy_version": np.__version__,
         }
@@ -264,7 +331,8 @@ class RapidOCREngine(BaseOCREnginePrimitive):
                 },
             },
             "runtime": {
-                "provider": "CPUExecutionProvider",
+                "provider": expected_ep,
+                "execution_provider": self.execution_provider,
             },
             "resize_policy": resize_configured,
         }
@@ -319,6 +387,7 @@ class RapidOCREngine(BaseOCREnginePrimitive):
             "runtime": {
                 "actual_providers": actual_providers,
                 "is_cpu_only": actual_providers == ["CPUExecutionProvider"],
+                "configured_provider": self.execution_provider,
             },
             "resize_policy": resize_resolved,
         }
@@ -370,8 +439,10 @@ class RapidOCREngine(BaseOCREnginePrimitive):
 
         # 4. Providers
         providers = manifest["resolved"]["runtime"]["actual_providers"]
-        if "CPUExecutionProvider" not in providers:
-            errors.append(f"CPUExecutionProvider not found in ORT providers: {providers}")
+        expected_ep = "CUDAExecutionProvider" if self.execution_provider == "cuda" else "CPUExecutionProvider"
+        if not providers or providers[0] != expected_ep:
+            errors.append(f"Expected primary provider '{expected_ep}', but active providers are: {providers}")
+
 
         # 5. Resize policy verification
         if not manifest.get("resize_policy", {}).get("verified", False):

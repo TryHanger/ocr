@@ -1,0 +1,104 @@
+{
+  "title": "B0 CPU vs B0 GPU Execution Provider Effect Analysis",
+  "num_documents": 126,
+  "split": "validation",
+  "seed": 42,
+  "runs": {
+    "b0_cpu": {
+      "experiment_id": "b0_clean_validation_n126",
+      "config_hash": "97c6bfd0d9b1708260e42c03509d7ee6b317c2ef93ea85bed1ce16aa2a1685a0",
+      "execution_provider": "CPUExecutionProvider",
+      "execution_duration_sec": 413.63
+    },
+    "b0_gpu": {
+      "experiment_id": "b0_clean_validation_n126_gpu",
+      "config_hash": "63bf882aa172d96abc58b9e220e14b3d8bd01975f7ba0005cffc6c23bb2c7493",
+      "execution_provider": "CUDAExecutionProvider",
+      "execution_duration_sec": 172.48
+    }
+  },
+  "ocr_metrics_comparison": {
+    "cer_normalized": {
+      "cpu": 0.3203,
+      "gpu": 0.3203,
+      "delta": 0.0
+    },
+    "cer_raw": {
+      "cpu": 0.3518,
+      "gpu": 0.3518,
+      "delta": 0.0
+    },
+    "wer_normalized": {
+      "cpu": 0.4833,
+      "gpu": 0.4831,
+      "delta": -0.0002
+    },
+    "wer_raw": {
+      "cpu": 0.4833,
+      "gpu": 0.4831,
+      "delta": -0.0002
+    },
+    "char_ned_normalized": {
+      "cpu": 0.6816,
+      "gpu": 0.6816,
+      "delta": 0.0
+    },
+    "char_ned_raw": {
+      "cpu": 0.6503,
+      "gpu": 0.6503,
+      "delta": 0.0
+    }
+  },
+  "kie_metrics_comparison": {
+    "macro_f1_normalized": {
+      "cpu": 0.4762,
+      "gpu": 0.4782,
+      "delta": 0.002
+    },
+    "macro_precision_normalized": {
+      "cpu": 0.5386,
+      "gpu": 0.5406,
+      "delta": 0.002
+    },
+    "macro_recall_normalized": {
+      "cpu": 0.4762,
+      "gpu": 0.4782,
+      "delta": 0.002
+    },
+    "entity_hmean": {
+      "cpu": 0.4959,
+      "gpu": 0.4979,
+      "delta": 0.002
+    },
+    "normalized_doc_em": {
+      "cpu": 0.0,
+      "gpu": 0.0,
+      "delta": 0.0
+    }
+  },
+  "text_level_direct_equivalence": {
+    "exact_text_match_count": 126,
+    "exact_text_match_rate": 1.0,
+    "mean_direct_cer": 0.0,
+    "median_direct_cer": 0.0,
+    "p95_direct_cer": 0.0,
+    "mean_direct_wer": 0.0,
+    "mean_direct_ned": 1.0,
+    "token_count_diff_sum": 0
+  },
+  "kie_field_level_agreement": {
+    "company_match_rate": 1.0,
+    "date_match_rate": 1.0,
+    "address_match_rate": 1.0,
+    "total_match_rate": 1.0,
+    "overall_agreement_rate": 1.0,
+    "field_differences": {
+      "company": [],
+      "date": [],
+      "address": [],
+      "total": []
+    }
+  },
+  "number_of_documents_with_any_difference": 0,
+  "per_document_differences": []
+}

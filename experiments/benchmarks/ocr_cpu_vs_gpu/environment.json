@@ -1,0 +1,34 @@
+{
+  "platform": "Windows-10-10.0.19045-SP0",
+  "python_version": "3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)]",
+  "cuda_device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "total_vram_mb": 4096.0,
+  "onnxruntime_providers": [
+    "CPUExecutionProvider"
+  ],
+  "gpu_providers": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "models": {
+    "detector": {
+      "family": "PP-OCRv6",
+      "size": "small",
+      "expected_model_file": "PP-OCRv6_det_small.onnx",
+      "expected_sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+    },
+    "recognizer": {
+      "family": "PP-OCRv6",
+      "size": "small",
+      "expected_model_file": "PP-OCRv6_rec_small.onnx",
+      "expected_sha256": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
+    },
+    "classifier": {
+      "enabled": true,
+      "family": "PP-OCRv4",
+      "size": "mobile",
+      "expected_model_file": "ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+      "expected_sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c"
+    }
+  }
+}

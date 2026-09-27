@@ -124,6 +124,34 @@ def build_conditions_matrix(
     # Full Matrix Construction
     matrix_cfg = config.get("matrix", config)
 
+    # 0. Explicit Conditions Override (e.g. for custom smoke configurations)
+    explicit_conditions = matrix_cfg.get("explicit_conditions")
+    if explicit_conditions:
+        for item in explicit_conditions:
+            deg = item.get("degradation", item.get("degradation_type", "none"))
+            sev = int(item.get("severity", 0))
+            prep = item.get("preprocessing", item.get("preprocessing_id", "none"))
+            b_type = item.get("baseline_type")
+            if not b_type:
+                if sev == 0:
+                    b_type = "B0"
+                elif prep.lower() in ("none", "p0", "raw", ""):
+                    b_type = "B1"
+                else:
+                    b_type = "B2"
+            cid = build_condition_id(deg, sev, prep)
+            conditions.append(
+                ExperimentCondition(
+                    condition_id=cid,
+                    degradation_type=deg,
+                    severity=sev,
+                    preprocessing_id=prep,
+                    baseline_type=b_type,
+                    metadata=item.get("metadata", {}),
+                )
+            )
+        return conditions
+
     # 1. Control Condition (B0): Exactly one D0_S0_P0
     include_control = matrix_cfg.get("include_control", True)
     if include_control:
@@ -151,21 +179,23 @@ def build_conditions_matrix(
     preprocessing_pipelines: Dict[str, Any] = matrix_cfg.get("preprocessing_pipelines", {})
 
     # 2. B1: Degradation-only conditions (D1..D8 × severity {1..4} × P0)
-    for deg in degradations:
-        if deg.lower() in ("none", "control"):
-            continue
-        for sev in severities:
-            cid = build_condition_id(deg, sev, "none")
-            conditions.append(
-                ExperimentCondition(
-                    condition_id=cid,
-                    degradation_type=deg,
-                    severity=sev,
-                    preprocessing_id="none",
-                    baseline_type="B1",
-                    metadata={"is_degraded": True},
+    include_b1 = matrix_cfg.get("include_b1", True)
+    if include_b1:
+        for deg in degradations:
+            if deg.lower() in ("none", "control"):
+                continue
+            for sev in severities:
+                cid = build_condition_id(deg, sev, "none")
+                conditions.append(
+                    ExperimentCondition(
+                        condition_id=cid,
+                        degradation_type=deg,
+                        severity=sev,
+                        preprocessing_id="none",
+                        baseline_type="B1",
+                        metadata={"is_degraded": True},
+                    )
                 )
-            )
 
     # 3. B2: Degradation + Preprocessing conditions (D1..D8 × severity {1..4} × P*)
     for prep_id in sorted(preprocessing_pipelines.keys()):

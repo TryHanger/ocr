@@ -1,0 +1,66 @@
+﻿# SROIE2019 B1 Engineering Smoke Configuration
+# Evaluates exactly 5 representative conditions on N=3 validation documents
+version: "1.0.0"
+experiment_seed: 42
+
+dataset:
+  root: "data/SROIE2019"
+  candidate_roots:
+    - "data/SROIE2019"
+    - "data"
+  split: "validation"
+  subset_size: 3
+  subset_seed: 42
+
+degradation_config: "configs/degradation.yaml"
+
+# 5 representative smoke conditions per TASK-014 Section 4:
+# 1. D0_S0_P0 (control reference)
+# 2. D1_S1_P0 (light degradation)
+# 3. D1_S4_P0 (heavy degradation)
+# 4. D6_S2_P0 (geometric degradation)
+# 5. D8_S2_P0 (photometric degradation)
+matrix:
+  explicit_conditions:
+    - { degradation: "none", severity: 0, preprocessing: "none", baseline_type: "B0" }
+    - { degradation: "gaussian_blur", severity: 1, preprocessing: "none", baseline_type: "B1" }
+    - { degradation: "gaussian_blur", severity: 4, preprocessing: "none", baseline_type: "B1" }
+    - { degradation: "rotation", severity: 2, preprocessing: "none", baseline_type: "B1" }
+    - { degradation: "shadow", severity: 2, preprocessing: "none", baseline_type: "B1" }
+
+ocr:
+  engine_name: "rapidocr"
+  package_version: "3.9.2"
+  reading_order:
+    line_tolerance_factor: 0.5
+  resize_policy:
+    max_side_len: 2000
+    min_side_len: 30
+    det_limit_side_len: 736
+    det_limit_type: "min"
+  parameters:
+    text_score: 0.5
+    min_confidence: 0.0
+    use_cls: true
+
+kie:
+  engine_name: "rule_based"
+  engine:
+    fallback_largest_amount: false
+    fallback_penalty: 0.5
+    min_confidence_threshold: 0.2
+
+evaluation:
+  target_fields:
+    - "company"
+    - "date"
+    - "address"
+    - "total"
+  bootstrap:
+    iterations: 1000
+    ci: 0.95
+    seed: 42
+
+output:
+  output_dir: "experiments/runs"
+  save_images: false

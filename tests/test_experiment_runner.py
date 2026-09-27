@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import pytest
 import numpy as np
+import yaml
 
 from src.datasets.sroie import SROIEAdapter
 from src.experiments.bootstrap import aggregate_condition_records, compute_bootstrap_ci
@@ -667,6 +668,193 @@ def test_run_experiment_cli_b0_and_data_root(monkeypatch, tmp_path: Path):
     assert (run_dir / "summary.json").is_file()
     assert (run_dir / "manifest.json").is_file()
     assert (run_dir / "per_document.jsonl").is_file()
+
+
+def test_b1_condition_matrix_generation():
+    """Verify B1 condition matrix generates exactly 33 conditions (1 control + 32 B1)."""
+    cfg = load_experiment_config("configs/b1_baseline.yaml")
+    conditions = build_conditions_matrix(cfg, smoke_mode=False)
+
+    # 1. Total count
+    assert len(conditions) == 33
+
+    # 2. Exactly one control
+    controls = [c for c in conditions if c.condition_id == "D0_S0_P0"]
+    assert len(controls) == 1
+    assert controls[0].baseline_type == "B0"
+    assert controls[0].severity == 0
+    assert controls[0].degradation_type == "none"
+
+    # 3. Exactly 32 degradation conditions
+    deg_conditions = [c for c in conditions if c.condition_id != "D0_S0_P0"]
+    assert len(deg_conditions) == 32
+    for c in deg_conditions:
+        assert c.baseline_type == "B1"
+        assert c.preprocessing_id == "none"
+        assert c.severity in (1, 2, 3, 4)
+        assert c.degradation_type != "none"
+
+    # 4. All D1-D8 present across all S1-S4
+    expected_degs = {
+        "gaussian_blur", "motion_blur", "gaussian_noise", "jpeg_compression",
+        "downsampling", "rotation", "perspective", "shadow"
+    }
+    found_degs = {c.degradation_type for c in deg_conditions}
+    assert found_degs == expected_degs
+
+    for d in expected_degs:
+        d_sevs = {c.severity for c in deg_conditions if c.degradation_type == d}
+        assert d_sevs == {1, 2, 3, 4}
+
+    # 5. D1-D8 severity 0 absent
+    assert not any(c.degradation_type in expected_degs and c.severity == 0 for c in conditions)
+
+    # 6. Duplicate conditions absent
+    cond_ids = [c.condition_id for c in conditions]
+    assert len(cond_ids) == len(set(cond_ids))
+
+
+def test_b1_degradation_parameter_resolution():
+    """Verify runner resolves calibrated parameters matching configs/degradation.yaml for all D1-D8 x S1-S4."""
+    with open("configs/degradation.yaml", "r", encoding="utf-8") as f:
+        deg_yaml = yaml.safe_load(f)
+
+    runner = UnifiedExperimentRunner(
+        config={"degradation_config": "configs/degradation.yaml", "ocr": {"engine_name": "mock"}, "kie": {"engine_name": "mock"}},
+        allow_fixture=True,
+    )
+
+    expected_degs = [
+        "gaussian_blur", "motion_blur", "gaussian_noise", "jpeg_compression",
+        "downsampling", "rotation", "perspective", "shadow"
+    ]
+
+    for deg in expected_degs:
+        yaml_sevs = deg_yaml["degradations"][deg]["severities"]
+        for sev in (1, 2, 3, 4):
+            resolved = runner._resolve_degradation_params(deg, sev)
+            expected = yaml_sevs.get(sev) if sev in yaml_sevs else yaml_sevs.get(str(sev))
+            assert resolved == expected, f"Mismatch for {deg} S{sev}: resolved={resolved} != expected={expected}"
+            assert len(resolved) > 0, f"Parameters must not be empty for {deg} S{sev}"
+
+
+def test_b1_delta_from_b0_calculation(tmp_path: Path):
+    """Verify delta_from_b0 calculation relative to B0 reference using controlled analytical values."""
+    runner = UnifiedExperimentRunner(
+        config={"ocr": {"engine_name": "mock"}, "kie": {"engine_name": "mock"}, "output": {"output_dir": str(tmp_path)}},
+        allow_fixture=True,
+    )
+
+    mock_b0_ref = {
+        "source": "frozen_b0_reference",
+        "experiment_id": "test_b0_ref",
+        "config_hash": "hash123",
+        "path": "dummy/summary.json",
+        "metrics": {
+            "ocr": {
+                "cer_raw": {"mean": 0.3000},
+                "cer_normalized": {"mean": 0.2500},
+                "wer_raw": {"mean": 0.4000},
+                "wer_normalized": {"mean": 0.3500},
+                "char_ned_raw": {"mean": 0.7000},
+                "char_ned_normalized": {"mean": 0.7500},
+            },
+            "kie": {
+                "macro_f1_raw": 0.5000,
+                "macro_f1_normalized": 0.5500,
+                "sroie_official_compatible": {"entity_hmean": 0.5200},
+                "normalized_doc_em_rate": 0.1000,
+            },
+        },
+    }
+    runner._load_b0_reference = lambda: mock_b0_ref
+
+    cond_summaries = {
+        "D0_S0_P0": {
+            "ocr": {
+                "cer_raw": {"mean": 0.3000}, "cer_normalized": {"mean": 0.2500},
+                "wer_raw": {"mean": 0.4000}, "wer_normalized": {"mean": 0.3500},
+                "char_ned_raw": {"mean": 0.7000}, "char_ned_normalized": {"mean": 0.7500},
+            },
+            "kie": {
+                "macro_f1_raw": 0.5000, "macro_f1_normalized": 0.5500,
+                "sroie_official_compatible": {"entity_hmean": 0.5200}, "normalized_doc_em_rate": 0.1000,
+            },
+        },
+        "D1_S2_P0": {
+            "ocr": {
+                "cer_raw": {"mean": 0.4500}, "cer_normalized": {"mean": 0.4000},
+                "wer_raw": {"mean": 0.5500}, "wer_normalized": {"mean": 0.5000},
+                "char_ned_raw": {"mean": 0.5500}, "char_ned_normalized": {"mean": 0.6000},
+            },
+            "kie": {
+                "macro_f1_raw": 0.3500, "macro_f1_normalized": 0.4000,
+                "sroie_official_compatible": {"entity_hmean": 0.3800}, "normalized_doc_em_rate": 0.0500,
+            },
+        },
+        "D1_S1_P0": {
+            "ocr": {
+                "cer_raw": {"mean": 0.2800}, "cer_normalized": {"mean": 0.2200},
+                "wer_raw": {"mean": 0.3700}, "wer_normalized": {"mean": 0.3100},
+                "char_ned_raw": {"mean": 0.7200}, "char_ned_normalized": {"mean": 0.7800},
+            },
+            "kie": {
+                "macro_f1_raw": 0.5300, "macro_f1_normalized": 0.5800,
+                "sroie_official_compatible": {"entity_hmean": 0.5500}, "normalized_doc_em_rate": 0.1200,
+            },
+        },
+    }
+
+    ref_m = mock_b0_ref["metrics"]
+    b0_ocr = ref_m["ocr"]
+    b0_kie = ref_m["kie"]
+
+    for cid, c_sum in cond_summaries.items():
+        c_ocr = c_sum["ocr"]
+        c_kie = c_sum["kie"]
+        c_sum["delta_from_b0"] = {
+            "delta_cer_raw": round(c_ocr["cer_raw"]["mean"] - b0_ocr["cer_raw"]["mean"], 4),
+            "delta_cer_normalized": round(c_ocr["cer_normalized"]["mean"] - b0_ocr["cer_normalized"]["mean"], 4),
+            "delta_wer_raw": round(c_ocr["wer_raw"]["mean"] - b0_ocr["wer_raw"]["mean"], 4),
+            "delta_wer_normalized": round(c_ocr["wer_normalized"]["mean"] - b0_ocr["wer_normalized"]["mean"], 4),
+            "delta_char_ned_raw": round(c_ocr["char_ned_raw"]["mean"] - b0_ocr["char_ned_raw"]["mean"], 4),
+            "delta_char_ned_normalized": round(c_ocr["char_ned_normalized"]["mean"] - b0_ocr["char_ned_normalized"]["mean"], 4),
+            "delta_macro_f1_raw": round(c_kie["macro_f1_raw"] - b0_kie["macro_f1_raw"], 4),
+            "delta_macro_f1_normalized": round(c_kie["macro_f1_normalized"] - b0_kie["macro_f1_normalized"], 4),
+            "delta_entity_hmean": round(c_kie["sroie_official_compatible"]["entity_hmean"] - b0_kie["sroie_official_compatible"]["entity_hmean"], 4),
+            "delta_normalized_doc_em": round(c_kie["normalized_doc_em_rate"] - b0_kie["normalized_doc_em_rate"], 4),
+        }
+
+    # Check 1: Equal to B0 -> Delta == 0.0
+    d0 = cond_summaries["D0_S0_P0"]["delta_from_b0"]
+    assert d0["delta_cer_raw"] == 0.0
+    assert d0["delta_cer_normalized"] == 0.0
+    assert d0["delta_wer_raw"] == 0.0
+    assert d0["delta_wer_normalized"] == 0.0
+    assert d0["delta_char_ned_raw"] == 0.0
+    assert d0["delta_char_ned_normalized"] == 0.0
+    assert d0["delta_macro_f1_raw"] == 0.0
+    assert d0["delta_macro_f1_normalized"] == 0.0
+    assert d0["delta_entity_hmean"] == 0.0
+    assert d0["delta_normalized_doc_em"] == 0.0
+
+    # Check 2: Degraded (CER up, NED down, F1 down)
+    d_deg = cond_summaries["D1_S2_P0"]["delta_from_b0"]
+    assert d_deg["delta_cer_normalized"] == 0.1500
+    assert d_deg["delta_wer_normalized"] == 0.1500
+    assert d_deg["delta_char_ned_normalized"] == -0.1500
+    assert d_deg["delta_macro_f1_normalized"] == -0.1500
+    assert d_deg["delta_entity_hmean"] == -0.1400
+    assert d_deg["delta_normalized_doc_em"] == -0.0500
+
+    # Check 3: Improved (CER down, NED up, F1 up)
+    d_imp = cond_summaries["D1_S1_P0"]["delta_from_b0"]
+    assert d_imp["delta_cer_normalized"] == -0.0300
+    assert d_imp["delta_wer_normalized"] == -0.0400
+    assert d_imp["delta_char_ned_normalized"] == 0.0300
+    assert d_imp["delta_macro_f1_normalized"] == 0.0300
+    assert d_imp["delta_entity_hmean"] == 0.0300
+    assert d_imp["delta_normalized_doc_em"] == 0.0200
 
 
 

@@ -1,0 +1,119 @@
+# SROIE2019 Preprocessing Robustness (B2) Smoke Configuration on GPU (CUDA)
+# Quick validation on 3 documents across 5 representative conditions:
+# 1 control + 4 distinct preprocessing pipelines paired with different degradations
+version: "1.0.0"
+experiment_seed: 42
+
+dataset:
+  root: "data/SROIE2019"
+  candidate_roots:
+    - "data/SROIE2019"
+    - "data"
+  split: "validation"
+  subset_size: 3
+  subset_seed: 42
+
+degradation_config: "configs/degradation.yaml"
+b0_reference_path: "experiments/runs/b0_clean_validation_n126_gpu/summary.json"
+b1_reference_path: "experiments/runs/b1_degraded_validation_n126_gpu/summary.json"
+
+matrix:
+  explicit_conditions:
+    - degradation: "none"
+      severity: 0
+      preprocessing: "none"
+      baseline_type: "B0"
+    - degradation: "gaussian_blur"
+      severity: 1
+      preprocessing: "p_minimal_cleanup"
+      baseline_type: "B2"
+    - degradation: "gaussian_blur"
+      severity: 4
+      preprocessing: "p_contrast_enhancement"
+      baseline_type: "B2"
+    - degradation: "motion_blur"
+      severity: 2
+      preprocessing: "p_standard_receipt_enhancement"
+      baseline_type: "B2"
+    - degradation: "gaussian_noise"
+      severity: 3
+      preprocessing: "p_aggressive_binarization"
+      baseline_type: "B2"
+  preprocessing_pipelines:
+    p_minimal_cleanup:
+      steps:
+        - grayscale
+        - denoise
+      parameters:
+        denoise:
+          method: median
+          ksize: 3
+    p_contrast_enhancement:
+      steps:
+        - grayscale
+        - clahe
+      parameters:
+        clahe:
+          clip_limit: 2.0
+          tile_grid_size: [8, 8]
+    p_standard_receipt_enhancement:
+      steps:
+        - deskew
+        - clahe
+        - denoise
+      parameters:
+        deskew:
+          max_angle: 15.0
+        clahe:
+          clip_limit: 2.0
+          tile_grid_size: [8, 8]
+        denoise:
+          method: median
+          ksize: 3
+    p_aggressive_binarization:
+      steps:
+        - grayscale
+        - binarization
+      parameters:
+        binarization:
+          method: gaussian
+          block_size: 11
+          c: 2.0
+
+ocr:
+  engine_name: "rapidocr"
+  package_version: "3.9.2"
+  execution_provider: "cuda"
+  reading_order:
+    line_tolerance_factor: 0.5
+  resize_policy:
+    max_side_len: 2000
+    min_side_len: 30
+    det_limit_side_len: 736
+    det_limit_type: "min"
+  parameters:
+    text_score: 0.5
+    min_confidence: 0.0
+    use_cls: true
+
+kie:
+  engine_name: "rule_based"
+  engine:
+    fallback_largest_amount: false
+    fallback_penalty: 0.5
+    min_confidence_threshold: 0.2
+
+evaluation:
+  target_fields:
+    - "company"
+    - "date"
+    - "address"
+    - "total"
+  bootstrap:
+    iterations: 100
+    ci: 0.95
+    seed: 42
+
+output:
+  output_dir: "experiments/runs"
+  save_images: false

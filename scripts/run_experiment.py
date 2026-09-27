@@ -101,6 +101,13 @@ def main() -> int:
         default=None,
         help="Explicit experiment identifier slug",
     )
+    parser.add_argument(
+        "--execution-provider",
+        type=str,
+        default=None,
+        choices=["cpu", "cuda"],
+        help="Explicit execution provider for OCR engine ('cpu' or 'cuda')",
+    )
 
     args = parser.parse_args()
 
@@ -112,6 +119,8 @@ def main() -> int:
         return 1
 
     # Apply CLI overrides
+    if args.execution_provider:
+        config.setdefault("ocr", {})["execution_provider"] = args.execution_provider
     if args.data_root:
         resolved_root_str = str(args.data_root.resolve())
         config.setdefault("dataset", {})["root"] = resolved_root_str
@@ -133,10 +142,11 @@ def main() -> int:
             config.setdefault("matrix", {})["severities"] = []
             config.setdefault("matrix", {})["preprocessing_pipelines"] = {}
         elif b_type == "B1":
-            config.setdefault("matrix", {})["include_control"] = False
+            config.setdefault("matrix", {})["include_control"] = True
             config.setdefault("matrix", {})["preprocessing_pipelines"] = {}
         elif b_type == "B2":
             config.setdefault("matrix", {})["include_control"] = False
+
 
     try:
         runner = UnifiedExperimentRunner(
@@ -192,10 +202,14 @@ def main() -> int:
         norm_em = kie_s.get("normalized_doc_em_rate", 0.0)
         req = c_data.get("document_counts", {}).get("requested", 0)
         succ = c_data.get("document_counts", {}).get("successful", 0)
+        d_b0 = c_data.get("delta_from_b0", {})
+        d_cer = d_b0.get("delta_cer_normalized")
+        d_f1 = d_b0.get("delta_macro_f1_normalized")
+        delta_str = f" | dCER: {d_cer:+.4f} | dF1: {d_f1:+.4f}" if (d_cer is not None and d_f1 is not None) else ""
         print(
             f"  [{cid:16s}] Docs: {succ}/{req} | "
             f"CER_norm: {cer_m:.4f} | NED_norm: {ned_m:.4f} | "
-            f"Macro_F1: {macro_f1:.4f} | Norm_EM: {norm_em:.4f}"
+            f"Macro_F1: {macro_f1:.4f} | Norm_EM: {norm_em:.4f}{delta_str}"
         )
     print("=" * 60 + "\n")
 
