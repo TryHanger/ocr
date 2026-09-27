@@ -35,29 +35,38 @@ def run_ocr_baseline(
         cfg = yaml.safe_load(f)
 
     # 1. Determine data source
-    candidate_real = [
-        data_root if data_root else None,
-        Path("data/SROIE2019"),
-        Path("data"),
-    ]
-    actual_root: Optional[Path] = None
-    data_status = "PENDING"
-    dataset_type = "synthetic_fixture"
-
-    for p in candidate_real:
-        if p and (p / "train" / "img").is_dir() and len(list((p / "train" / "img").glob("*.jpg"))) >= 100:
-            actual_root = p
+    if data_root is not None:
+        actual_root = Path(data_root)
+        train_img_dir = actual_root / "train" / "img"
+        if train_img_dir.is_dir() and len(list(train_img_dir.glob("*.jpg"))) >= 100:
             data_status = "COMPLETED"
             dataset_type = "real_sroie"
-            break
-
-    if actual_root is None:
-        # Fallback to local valid fixture for pipeline verification
-        fixture_path = Path("tests/fixtures/sroie_valid")
-        if fixture_path.is_dir():
-            actual_root = fixture_path
         else:
-            actual_root = Path("tests/fixtures/sroie")
+            data_status = "PENDING"
+            dataset_type = "synthetic_fixture"
+    else:
+        candidate_real = [
+            Path("data/SROIE2019"),
+            Path("data"),
+        ]
+        actual_root = None
+        data_status = "PENDING"
+        dataset_type = "synthetic_fixture"
+
+        for p in candidate_real:
+            if p and (p / "train" / "img").is_dir() and len(list((p / "train" / "img").glob("*.jpg"))) >= 100:
+                actual_root = p
+                data_status = "COMPLETED"
+                dataset_type = "real_sroie"
+                break
+
+        if actual_root is None:
+            # Fallback to local valid fixture for pipeline verification
+            fixture_path = Path("tests/fixtures/sroie_valid")
+            if fixture_path.is_dir():
+                actual_root = fixture_path
+            else:
+                actual_root = Path("tests/fixtures/sroie")
 
     # 2. Instantiate SROIE Adapter
     adapter = SROIEAdapter(actual_root)

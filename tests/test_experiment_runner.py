@@ -407,3 +407,139 @@ def test_aggregate_condition_records_sroie_official_compatible():
     assert sroie_off["entity_precision"] == round(7 / 8, 4)
     assert sroie_off["entity_recall"] == round(7 / 8, 4)
     assert sroie_off["entity_hmean"] == round(7 / 8, 4)
+
+
+def test_runner_debug_timing_stages_and_init(tmp_path: Path):
+    """Verify runner with debug_timing=True logs INIT metrics and START/DONE for all pipeline stages."""
+    cfg = {
+        "experiment_seed": 42,
+        "dataset": {"candidate_roots": ["tests/fixtures/sroie_valid"], "split": "development"},
+        "ocr": {"engine_name": "mock"},
+        "kie": {"engine_name": "mock"},
+        "evaluation": {"bootstrap": {"iterations": 50}},
+    }
+    runner = UnifiedExperimentRunner(
+        config=cfg,
+        output_dir=tmp_path,
+        smoke_mode=True,
+        allow_fixture=True,
+        debug_timing=True,
+        experiment_id="timing_test",
+    )
+    summary = runner.run()
+    assert summary is not None
+
+    log_path = tmp_path / "timing_test" / "logs" / "run.log"
+    assert log_path.exists()
+    log_content = log_path.read_text(encoding="utf-8")
+
+    # Verify [INIT] metrics logged
+    assert "[INIT]" in log_content
+    assert "dataset_load_seconds=" in log_content
+    assert "engine_initialization_seconds=" in log_content
+    assert "number_of_documents=" in log_content
+    assert "number_of_conditions=" in log_content
+
+    # Verify [START] and [DONE] logged for all 8 stages
+    for stage in (
+        "load_image",
+        "degradation",
+        "preprocessing",
+        "ocr",
+        "kie",
+        "gt_load",
+        "evaluation",
+        "write_result",
+    ):
+        assert f"[START] doc=doc_valid_1 condition=D0_S0_P0 stage={stage}" in log_content
+        assert f"[DONE]  doc=doc_valid_1 condition=D0_S0_P0 stage={stage} elapsed=" in log_content
+
+
+def test_runner_single_engine_initialization(tmp_path: Path, monkeypatch):
+    """Verify engines are initialized exactly once per runner invocation, not per document or condition."""
+    cfg = {
+        "experiment_seed": 42,
+        "dataset": {"candidate_roots": ["tests/fixtures/sroie_valid"], "split": "development"},
+        "ocr": {"engine_name": "mock"},
+        "kie": {"engine_name": "mock"},
+        "evaluation": {"bootstrap": {"iterations": 50}},
+    }
+    runner = UnifiedExperimentRunner(
+        config=cfg,
+        output_dir=tmp_path,
+        smoke_mode=True,
+        allow_fixture=True,
+        experiment_id="single_init_test",
+    )
+
+    init_call_count = 0
+    orig_setup = runner._setup_engines
+
+    def counted_setup():
+        nonlocal init_call_count
+        init_call_count += 1
+        return orig_setup()
+
+    monkeypatch.setattr(runner, "_setup_engines", counted_setup)
+    runner.run()
+
+    # Must be called exactly once
+    assert init_call_count == 1
+
+
+def test_runner_incremental_flush(tmp_path: Path, monkeypatch):
+    """Verify per_document.jsonl is incrementally flushed to disk after every evaluation."""
+    cfg = {
+        "experiment_seed": 42,
+        "dataset": {"candidate_roots": ["tests/fixtures/sroie_valid"], "split": "development"},
+        "ocr": {"engine_name": "mock"},
+        "kie": {"engine_name": "mock"},
+        "evaluation": {"bootstrap": {"iterations": 50}},
+    }
+    runner = UnifiedExperimentRunner(
+        config=cfg,
+        output_dir=tmp_path,
+        smoke_mode=True,
+        allow_fixture=True,
+        experiment_id="flush_test",
+    )
+
+    per_doc_path = tmp_path / "flush_test" / "per_document.jsonl"
+    flush_calls = 0
+    orig_open = open
+
+    class FlushingProxy:
+        def __init__(self, f):
+            self._f = f
+
+        def write(self, s):
+            return self._f.write(s)
+
+        def flush(self):
+            nonlocal flush_calls
+            flush_calls += 1
+            return self._f.flush()
+
+        def __enter__(self):
+            self._f.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._f.__exit__(*args)
+
+    def monitored_open(path, *args, **kwargs):
+        f = orig_open(path, *args, **kwargs)
+        if str(path).endswith("per_document.jsonl"):
+            return FlushingProxy(f)
+        return f
+
+    monkeypatch.setattr("builtins.open", monitored_open)
+    runner.run()
+
+    # With 1 document in fixture and 5 conditions = 5 evaluations
+    # Must flush after each of the 5 records
+    assert flush_calls == 5
+    with orig_open(per_doc_path, "r", encoding="utf-8") as f:
+        final_lines = [l for l in f if l.strip()]
+        assert len(final_lines) == 5
+

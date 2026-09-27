@@ -296,16 +296,17 @@ class SROIEAdapter(BaseDatasetAdapter):
                 )
 
             # Reject lines with > 8 coordinates:
-            # If line has more than 9 comma-separated parts and the 9th item is numeric,
-            # it indicates a 9th coordinate before the transcription.
-            if len(all_parts) > 9:
+            # If line has >= 11 parts and both the 9th and 10th items are numeric,
+            # it indicates extra coordinates (at least 5 coordinate pairs) before the transcription.
+            if len(all_parts) >= 11:
                 try:
                     float(all_parts[8].strip())
-                    is_ninth_coord = True
+                    float(all_parts[9].strip())
+                    is_extra_coord = True
                 except ValueError:
-                    is_ninth_coord = False
+                    is_extra_coord = False
 
-                if is_ninth_coord:
+                if is_extra_coord:
                     raise ValueError(
                         f"Malformed OCR annotation at line {line_num} in document '{document_id}': "
                         f"line contains more than 8 coordinates (found 9th numeric coordinate '{all_parts[8].strip()}')"

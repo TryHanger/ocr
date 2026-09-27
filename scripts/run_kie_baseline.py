@@ -56,28 +56,37 @@ def run_kie_baseline(
             ocr_cfg = yaml.safe_load(f) or {}
 
     # 2. Determine Dataset Root
-    candidate_roots = [
-        data_root if data_root else None,
-        Path("data/SROIE2019"),
-        Path("data"),
-    ]
-    actual_root: Optional[Path] = None
-    data_status = "PENDING_REAL_DATA"
-    dataset_type = "synthetic_fixture"
-
-    for cand in candidate_roots:
-        if cand and (cand / "train" / "img").is_dir() and len(list((cand / "train" / "img").glob("*.jpg"))) >= 100:
-            actual_root = cand
+    if data_root is not None:
+        actual_root = Path(data_root)
+        train_img_dir = actual_root / "train" / "img"
+        if train_img_dir.is_dir() and len(list(train_img_dir.glob("*.jpg"))) >= 100:
             data_status = "COMPLETED"
             dataset_type = "real_sroie"
-            break
-
-    if actual_root is None:
-        fixture_path = Path("tests/fixtures/sroie_valid")
-        if fixture_path.is_dir() and (fixture_path / "train" / "img").is_dir():
-            actual_root = fixture_path
         else:
-            actual_root = Path("tests/fixtures/sroie")
+            data_status = "PENDING_REAL_DATA"
+            dataset_type = "synthetic_fixture"
+    else:
+        candidate_roots = [
+            Path("data/SROIE2019"),
+            Path("data"),
+        ]
+        actual_root = None
+        data_status = "PENDING_REAL_DATA"
+        dataset_type = "synthetic_fixture"
+
+        for cand in candidate_roots:
+            if cand and (cand / "train" / "img").is_dir() and len(list((cand / "train" / "img").glob("*.jpg"))) >= 100:
+                actual_root = cand
+                data_status = "COMPLETED"
+                dataset_type = "real_sroie"
+                break
+
+        if actual_root is None:
+            fixture_path = Path("tests/fixtures/sroie_valid")
+            if fixture_path.is_dir() and (fixture_path / "train" / "img").is_dir():
+                actual_root = fixture_path
+            else:
+                actual_root = Path("tests/fixtures/sroie")
 
     adapter = SROIEAdapter(actual_root)
     available_splits = [s for s in adapter.SUPPORTED_SPLITS if (adapter.root_dir / s).exists()]

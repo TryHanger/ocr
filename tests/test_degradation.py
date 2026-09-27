@@ -621,3 +621,43 @@ def test_cli_calibrate_degradations(monkeypatch, tmp_path: Path):
     assert (out_dir / "calibration_report.json").exists()
     assert (out_dir / "calibration_config.yaml").exists()
 
+
+def test_calibration_fixture_contract_and_performance(tmp_path: Path):
+    """Regression test ensuring calibration runner on fixtures is small, fast, finite, and low-memory."""
+    import math
+    import time
+    from scripts.calibrate_degradations import find_calibration_images, run_calibration
+
+    # 1. Verify calibration fixture search defaults to small fixture (<= 5 images), not full SROIE corpus
+    imgs, src = find_calibration_images()
+    assert src == "SYNTHETIC_FIXTURE"
+    assert len(imgs) <= 5
+
+    # 2. Verify calibration runner completes in < 2.0s
+    t0 = time.perf_counter()
+    report = run_calibration(
+        config_path=Path("configs/degradation.yaml"),
+        output_dir=tmp_path / "fast_calib",
+        save_samples=False,
+    )
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 2.0, f"Calibration runner took {elapsed:.2f}s, expected < 2.0s"
+
+    # 3. Verify cases correspond to config
+    with open("configs/degradation.yaml", "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    for deg_type, info in cfg["degradations"].items():
+        assert deg_type in report["degradations"]
+        deg_rep = report["degradations"][deg_type]
+        assert len(deg_rep["candidate_evaluations"]) == len(info.get("candidates", []))
+        assert len(deg_rep["severities"]) == 5  # 0..4
+
+        # 4. Verify metrics have finite values
+        for cand_eval in deg_rep["candidate_evaluations"]:
+            for m_name, val in cand_eval["mean_metrics"].items():
+                assert math.isfinite(val), f"Metric {m_name} is non-finite: {val}"
+        for sev_idx, sev_eval in deg_rep["severities"].items():
+            for m_name, val in sev_eval["mean_metrics"].items():
+                assert math.isfinite(val), f"Metric {m_name} for sev {sev_idx} is non-finite: {val}"
+
+

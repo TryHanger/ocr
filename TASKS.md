@@ -4,6 +4,16 @@
 
 *(Нет активных задач)*
 
+- **TASK-011-A-R2 — Test Suite & Baseline Runners Isolation Resolution**
+  - *Дата завершения:* 2026-09-27
+  - *Статус:* Завершена успешно (PASS).
+  - *Результат:* Устранены зависания и ошибки тестов после загрузки реального датасета SROIE:
+    1. *Калибровочный раннер:* Исправлена функция `find_calibration_images` в `scripts/calibrate_degradations.py`, исключено неявное переключение на 126 изображений реального валидационного сплита при отсутствии флага `--data-root` / `--allow-real-data`. Оптимизированы расчеты метрик искажений с `float64` до `float32`. Добавлен регрессионный тест `test_calibration_fixture_contract_and_performance`.
+    2. *KIE и OCR Baseline раннеры:* Исправлен механизм определения корня датасета в `scripts/run_kie_baseline.py`, `scripts/run_ocr_baseline.py` и `scripts/run_preprocessing_baseline.py`. При передаче аргумента `data_root` (в частности фикстур `tests/fixtures/sroie_valid`) раннеры больше не подменяют его silently полным корпусом `data/SROIE2019`.
+    3. *SROIE Ground Truth парсер координат:* Скорректирована эвристика проверки 8 координат в `src/datasets/sroie.py` и `scripts/audit_sroie.py`: теперь проверяется наличие двух числовых координат (токенов 9 и 10 при длине строки $\ge 11$), что предотвращает ложное отбрасывание квитанций с номерами домов/улиц (например, `13, JLN TASIK UTAMA 8`).
+    4. *Устойчивость и мониторинг `UnifiedExperimentRunner`:* Добавлен флаг `--debug-timing`, небуферизованный вывод логов и инкрементальный сброс (`flush()`) каждой записи в `per_document.jsonl`.
+    5. *Тестирование:* Полный тестовый набор (`pytest -v --cov=src`) проходит со 100% успехом (396 passed, 0 failed, coverage 92%).
+
 - **TASK-010 — Unified Experiment Runner & Experiment Matrix**
   - *Дата завершения:* 2026-09-26 (с учетом уточнений TASK-010-R1)
   - *Статус:* Завершена успешно (PASS).

@@ -77,6 +77,12 @@ def main() -> int:
         help="Execute minimal CPU smoke matrix (D0_S0_P0, D1_S1/S4_P0, D1_S1/S4_P_clahe)",
     )
     parser.add_argument(
+        "--debug-timing",
+        action="store_true",
+        default=False,
+        help="Enable detailed per-stage timing logging to stdout and run.log",
+    )
+    parser.add_argument(
         "--experiment-id",
         type=str,
         default=None,
@@ -112,6 +118,7 @@ def main() -> int:
             allow_fixture=args.allow_fixture,
             save_images=args.save_images or config.get("output", {}).get("save_images", False),
             experiment_id=args.experiment_id,
+            debug_timing=args.debug_timing,
         )
         summary = runner.run()
     except ValueError as ve:

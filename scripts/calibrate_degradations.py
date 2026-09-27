@@ -12,6 +12,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import sys
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure project root is in sys.path
@@ -29,7 +30,7 @@ from src.degradation.pipeline import DEGRADATION_REGISTRY, get_degradation
 
 def compute_mse(img1: np.ndarray, img2: np.ndarray) -> float:
     """Mean Squared Error between two uint8 images."""
-    diff = img1.astype(np.float64) - img2.astype(np.float64)
+    diff = img1.astype(np.float32) - img2.astype(np.float32)
     return float(np.mean(diff ** 2))
 
 
@@ -43,7 +44,7 @@ def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
 
 def compute_mae(img1: np.ndarray, img2: np.ndarray) -> float:
     """Mean Absolute Error between two uint8 images."""
-    diff = np.abs(img1.astype(np.float64) - img2.astype(np.float64))
+    diff = np.abs(img1.astype(np.float32) - img2.astype(np.float32))
     return float(np.mean(diff))
 
 
@@ -51,11 +52,11 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     """Structural Similarity Index (Wang et al., 2004) on luminance channel."""
     if img1.ndim == 3:
         # Convert RGB to Grayscale for standard SSIM
-        y1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY).astype(np.float64)
-        y2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY).astype(np.float64)
+        y1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY).astype(np.float32)
+        y2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY).astype(np.float32)
     else:
-        y1 = img1.astype(np.float64)
-        y2 = img2.astype(np.float64)
+        y1 = img1.astype(np.float32)
+        y2 = img2.astype(np.float32)
 
     c1 = (0.01 * 255.0) ** 2
     c2 = (0.03 * 255.0) ** 2
@@ -100,8 +101,8 @@ def compute_laplacian_ratio(orig: np.ndarray, deg: np.ndarray) -> float:
 
 def compute_luminance_drop(orig: np.ndarray, deg: np.ndarray) -> float:
     """Fractional mean luminance drop from original to degraded."""
-    m_orig = float(np.mean(orig))
-    m_deg = float(np.mean(deg))
+    m_orig = float(np.mean(orig, dtype=np.float64))
+    m_deg = float(np.mean(deg, dtype=np.float64))
     if m_orig <= 1e-6:
         return 0.0
     return float(max(0.0, (m_orig - m_deg) / m_orig))
@@ -121,27 +122,54 @@ def evaluate_image_pair(
     return metrics
 
 
-def find_calibration_images(data_root: Optional[Path] = None) -> Tuple[List[Path], str]:
-    """Identify calibration images: real SROIE validation split or synthetic fixtures."""
-    candidate_real = [
-        data_root / "train" / "img" if data_root else None,
-        data_root / "SROIE2019" / "train" / "img" if data_root else None,
-        Path("data/SROIE2019/train/img"),
-        Path("data/train/img"),
-    ]
+def find_calibration_images(
+    data_root: Optional[Path] = None,
+    allow_real_data: bool = False,
+    max_images: Optional[int] = None,
+) -> Tuple[List[Path], str]:
+    """Identify calibration images: real SROIE validation split or synthetic fixtures.
 
-    for p in candidate_real:
-        if p and p.is_dir():
-            all_imgs = sorted(list(p.glob("*.jpg")) + list(p.glob("*.png")))
-            if len(all_imgs) >= 126:
-                # Deterministic split: seed 42, 500 dev / 126 val
-                rng = np.random.default_rng(42)
-                perm = rng.permutation(len(all_imgs))
-                val_indices = perm[500:626] if len(all_imgs) >= 626 else perm[-126:]
-                val_imgs = [all_imgs[i] for i in sorted(val_indices)]
-                return val_imgs, "REAL_SROIE_VALIDATION_SPLIT"
+    By default (data_root=None, allow_real_data=False), returns deterministic synthetic
+    fixtures to ensure unit tests and local dry-runs are fast (<0.5s) and do not
+    silently execute against the 126-image real SROIE validation corpus.
+    """
+    if data_root is not None:
+        candidate_dirs = [
+            data_root / "train" / "img",
+            data_root / "SROIE2019" / "train" / "img",
+            data_root / "img",
+            data_root,
+        ]
+        for p in candidate_dirs:
+            if p and p.is_dir():
+                all_imgs = sorted(list(p.glob("*.jpg")) + list(p.glob("*.png")))
+                if len(all_imgs) >= 126:
+                    rng = np.random.default_rng(42)
+                    perm = rng.permutation(len(all_imgs))
+                    val_indices = perm[500:626] if len(all_imgs) >= 626 else perm[-126:]
+                    val_imgs = [all_imgs[i] for i in sorted(val_indices)]
+                    if max_images:
+                        val_imgs = val_imgs[:max_images]
+                    return val_imgs, "REAL_SROIE_VALIDATION_SPLIT"
+                elif all_imgs:
+                    if max_images:
+                        all_imgs = all_imgs[:max_images]
+                    return all_imgs, "SYNTHETIC_FIXTURE"
 
-    # Fallback to local synthetic fixtures
+    if allow_real_data:
+        for p in [Path("data/SROIE2019/train/img"), Path("data/train/img")]:
+            if p.is_dir():
+                all_imgs = sorted(list(p.glob("*.jpg")) + list(p.glob("*.png")))
+                if len(all_imgs) >= 126:
+                    rng = np.random.default_rng(42)
+                    perm = rng.permutation(len(all_imgs))
+                    val_indices = perm[500:626] if len(all_imgs) >= 626 else perm[-126:]
+                    val_imgs = [all_imgs[i] for i in sorted(val_indices)]
+                    if max_images:
+                        val_imgs = val_imgs[:max_images]
+                    return val_imgs, "REAL_SROIE_VALIDATION_SPLIT"
+
+    # Default fallback: local synthetic fixtures for testing
     fixture_paths = [
         Path("tests/fixtures/sroie_valid/train/img"),
         Path("tests/fixtures/sroie/train/img"),
@@ -150,9 +178,10 @@ def find_calibration_images(data_root: Optional[Path] = None) -> Tuple[List[Path
         if fp.is_dir():
             imgs = sorted(list(fp.glob("*.jpg")) + list(fp.glob("*.png")))
             if imgs:
+                if max_images:
+                    imgs = imgs[:max_images]
                 return imgs, "SYNTHETIC_FIXTURE"
 
-    # Minimal fallback: create 1 blank document image in memory if nothing exists
     return [], "NO_DATA_AVAILABLE"
 
 
@@ -161,12 +190,18 @@ def run_calibration(
     output_dir: Path,
     data_root: Optional[Path] = None,
     save_samples: bool = True,
+    allow_real_data: bool = False,
+    max_images: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Execute calibration procedure and write artifacts."""
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    images_paths, data_source = find_calibration_images(data_root)
+    images_paths, data_source = find_calibration_images(
+        data_root=data_root,
+        allow_real_data=allow_real_data,
+        max_images=max_images,
+    )
     real_data_status = (
         "COMPLETED" if data_source == "REAL_SROIE_VALIDATION_SPLIT" else "PENDING"
     )
@@ -367,6 +402,8 @@ def main() -> int:
     parser.add_argument("--data-root", type=Path, default=None, help="Root path to SROIE dataset")
     parser.add_argument("--output-dir", type=Path, default=Path("experiments/calibration"), help="Output directory")
     parser.add_argument("--no-samples", action="store_true", help="Do not save sample images")
+    parser.add_argument("--allow-real-data", action="store_true", help="Allow discovery of real SROIE validation data")
+    parser.add_argument("--max-images", type=int, default=None, help="Cap number of calibration images")
     args = parser.parse_args()
 
     report = run_calibration(
@@ -374,6 +411,8 @@ def main() -> int:
         output_dir=args.output_dir,
         data_root=args.data_root,
         save_samples=not args.no_samples,
+        allow_real_data=args.allow_real_data,
+        max_images=args.max_images,
     )
 
     print(f"Calibration completed. Status: {report['real_data_calibration']}")

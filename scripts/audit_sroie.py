@@ -274,14 +274,15 @@ def audit_sroie_dataset(
                     continue
 
                 # Reject lines with > 8 coordinates:
-                if len(all_parts) > 9:
+                if len(all_parts) >= 11:
                     try:
                         float(all_parts[8].strip())
-                        is_ninth_coord = True
+                        float(all_parts[9].strip())
+                        is_extra_coord = True
                     except ValueError:
-                        is_ninth_coord = False
+                        is_extra_coord = False
 
-                    if is_ninth_coord:
+                    if is_extra_coord:
                         c05_passed = False
                         errors.append(
                             f"[C-05] Document '{doc_id}' line {line_idx}: line contains more than 8 coordinates "

@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import cv2
@@ -60,12 +61,14 @@ class UnifiedExperimentRunner:
         allow_fixture: bool = False,
         save_images: bool = False,
         experiment_id: Optional[str] = None,
+        debug_timing: bool = False,
     ) -> None:
         self.config = config
         self.smoke_mode = smoke_mode
         self.allow_test = allow_test
         self.allow_fixture = allow_fixture
         self.save_images = save_images
+        self.debug_timing = debug_timing
 
         # Experiment Identity
         self.experiment_seed = int(self.config.get("experiment_seed", 42))
@@ -84,7 +87,7 @@ class UnifiedExperimentRunner:
         self.logs_dir = self.run_dir / "logs"
         self.images_dir = self.run_dir / "images"
 
-        # Initialize Logger
+        # Initialize Logger with immediate flushing
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         if self.save_images:
@@ -92,10 +95,23 @@ class UnifiedExperimentRunner:
 
         self.logger = logging.getLogger(f"runner_{self.experiment_id}")
         self.logger.setLevel(logging.INFO)
+        self.logger.handlers.clear()
+
+        class FlushingFileHandler(logging.FileHandler):
+            def emit(self, record: logging.LogRecord) -> None:
+                super().emit(record)
+                self.flush()
+
         log_file = self.logs_dir / "run.log"
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+        formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
+        file_handler = FlushingFileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
+
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        self.logger.addHandler(stream_handler)
+        self.logger.propagate = False
 
     def _setup_engines(self) -> Tuple[Any, Any, Any, SROIEAdapter]:
         """Instantiate single OCR engine, KIE engine, and dataset adapter for the entire run."""
@@ -154,10 +170,13 @@ class UnifiedExperimentRunner:
         self.logger.info("Initializing Unified Experiment Runner: %s", self.experiment_id)
         self.logger.info("Config Hash: %s, Git Commit: %s", self.config_hash, self.git_commit)
 
-        # 1. Setup Engines and Adapter
+        # 1. Setup Engines and Adapter (measuring initialization time)
+        t_engine_init_start = time.perf_counter()
         ocr_engine, kie_engine, evaluator, adapter = self._setup_engines()
+        engine_init_seconds = round(time.perf_counter() - t_engine_init_start, 4)
 
-        # 2. Resolve Split & Documents
+        # 2. Resolve Split & Documents (measuring dataset load time)
+        t_data_load_start = time.perf_counter()
         split_name = self.config.get("dataset", {}).get("split", "development")
         subset_size = self.config.get("dataset", {}).get("subset_size")
         subset_seed = self.config.get("dataset", {}).get("subset_seed", 42)
@@ -170,16 +189,25 @@ class UnifiedExperimentRunner:
             allow_test=self.allow_test,
             allow_fixture=self.allow_fixture,
         )
+        data_load_seconds = round(time.perf_counter() - t_data_load_start, 4)
 
+        # 3. Build Condition Matrix
+        conditions = build_conditions_matrix(self.config, smoke_mode=self.smoke_mode)
+
+        # Log one-time initialization metrics
+        self.logger.info(
+            "[INIT] dataset_load_seconds=%.4f engine_initialization_seconds=%.4f number_of_documents=%d number_of_conditions=%d",
+            data_load_seconds,
+            engine_init_seconds,
+            len(doc_ids),
+            len(conditions),
+        )
         self.logger.info(
             "Resolved split '%s' with %d documents (Data Status: %s)",
             resolved_split,
             len(doc_ids),
             data_status,
         )
-
-        # 3. Build Condition Matrix
-        conditions = build_conditions_matrix(self.config, smoke_mode=self.smoke_mode)
         self.logger.info("Generated %d experimental conditions to evaluate.", len(conditions))
 
         # 4. Prepare Preprocessing Specs Cache
@@ -220,11 +248,23 @@ class UnifiedExperimentRunner:
                         "error_message": None,
                     }
 
+                    # Helpers for stage timing and logging
+                    def _log_start(stg: str) -> float:
+                        self.logger.info("[START] doc=%s condition=%s stage=%s", doc_id, cond.condition_id, stg)
+                        return time.perf_counter()
+
+                    def _log_done(stg: str, t_st: float) -> None:
+                        elapsed = time.perf_counter() - t_st
+                        self.logger.info("[DONE]  doc=%s condition=%s stage=%s elapsed=%.4fs", doc_id, cond.condition_id, stg, elapsed)
+
                     try:
                         # Step A: Load Raw Image
+                        t_st = _log_start("load_image")
                         raw_image = adapter.get_image(doc_id).copy()
+                        _log_done("load_image", t_st)
 
                         # Step B: Apply Degradation
+                        t_st = _log_start("degradation")
                         if cond.severity > 0 and cond.degradation_type != "none":
                             deg_spec = DegradationSpec(
                                 type=cond.degradation_type,
@@ -235,8 +275,10 @@ class UnifiedExperimentRunner:
                             current_image, _ = deg_engine.apply(raw_image, deg_spec)
                         else:
                             current_image = raw_image
+                        _log_done("degradation", t_st)
 
                         # Step C: Apply Preprocessing
+                        t_st = _log_start("preprocessing")
                         if cond.preprocessing_id not in ("none", "p0", "raw", ""):
                             prep_methods = prep_pipelines_cfg.get(cond.preprocessing_id)
                             if not prep_methods:
@@ -260,6 +302,7 @@ class UnifiedExperimentRunner:
                                 from src.preprocessing.pipeline import PreprocessingPipeline
                                 prep_pipeline = PreprocessingPipeline(steps=prep_methods)
                                 current_image, _ = prep_pipeline.process(current_image, prep_spec)
+                        _log_done("preprocessing", t_st)
 
                         # Save debug image if requested
                         if self.save_images:
@@ -267,44 +310,64 @@ class UnifiedExperimentRunner:
                             cv2.imwrite(str(img_out_path), current_image)
 
                         # Step D: OCR Inference (Strict GT Isolation)
+                        t_st = _log_start("ocr")
                         try:
                             ocr_result = ocr_engine.recognize(current_image, doc_id)
+                            _log_done("ocr", t_st)
                         except Exception as e:
+                            _log_done("ocr", t_st)
                             record["status"] = "ocr_failed"
                             record["error_type"] = type(e).__name__
                             record["error_message"] = str(e)
                             self.logger.error("OCR failure for %s in %s: %s", doc_id, cond.condition_id, e)
                             per_condition_records[cond.condition_id].append(record)
+                            t_w = _log_start("write_result")
                             jsonl_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            jsonl_file.flush()
+                            _log_done("write_result", t_w)
                             continue
 
                         # Step E: KIE Inference (Strict GT Isolation: only ocr_result and doc_id)
+                        t_st = _log_start("kie")
                         try:
                             kie_result = kie_engine.extract(ocr_result=ocr_result, document_id=doc_id)
+                            _log_done("kie", t_st)
                         except Exception as e:
+                            _log_done("kie", t_st)
                             record["status"] = "kie_failed"
                             record["error_type"] = type(e).__name__
                             record["error_message"] = str(e)
                             self.logger.error("KIE failure for %s in %s: %s", doc_id, cond.condition_id, e)
                             per_condition_records[cond.condition_id].append(record)
+                            t_w = _log_start("write_result")
                             jsonl_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            jsonl_file.flush()
+                            _log_done("write_result", t_w)
                             continue
 
                         # Step F: Load Ground Truth (Strictly AFTER inference)
+                        t_st = _log_start("gt_load")
                         ocr_gt = adapter.get_ocr_ground_truth(doc_id)
                         kie_gt = adapter.get_kie_ground_truth(doc_id)
+                        _log_done("gt_load", t_st)
 
                         # Step G: Evaluation
+                        t_st = _log_start("evaluation")
                         try:
                             ocr_metrics = evaluator.evaluate_ocr(ocr_result, ocr_gt)
                             kie_metrics = evaluator.evaluate_kie(kie_result, kie_gt)
+                            _log_done("evaluation", t_st)
                         except Exception as e:
+                            _log_done("evaluation", t_st)
                             record["status"] = "evaluation_failed"
                             record["error_type"] = type(e).__name__
-                            record["error_message"] = str(e)
+                            record["error_message"] = str(fatal_e if "fatal_e" in locals() else e)
                             self.logger.error("Evaluation failure for %s in %s: %s", doc_id, cond.condition_id, e)
                             per_condition_records[cond.condition_id].append(record)
+                            t_w = _log_start("write_result")
                             jsonl_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            jsonl_file.flush()
+                            _log_done("write_result", t_w)
                             continue
 
                         # Success Record
@@ -318,8 +381,11 @@ class UnifiedExperimentRunner:
                         record["error_message"] = str(fatal_e)
                         self.logger.error("Fatal pipeline error for %s in %s: %s", doc_id, cond.condition_id, fatal_e)
 
+                    t_w = _log_start("write_result")
                     per_condition_records[cond.condition_id].append(record)
                     jsonl_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    jsonl_file.flush()
+                    _log_done("write_result", t_w)
 
         t_global_end = time.perf_counter()
         end_time_iso = datetime.now().isoformat()
