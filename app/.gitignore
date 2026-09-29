@@ -1,0 +1,15 @@
+# Node & Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env.local
+
+# Python caches and testing
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local database & uploaded storage files
+backend/storage/
+*.sqlite
+*.db
