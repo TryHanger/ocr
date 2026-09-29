@@ -10,9 +10,11 @@ import {
   Settings,
   Upload,
   Cpu,
+  RotateCcw,
 } from "lucide-react";
 
-export type NavTab = "dashboard" | "documents" | "review" | "analytics" | "research" | "degradations" | "preprocessing" | "settings";
+export type NavTab = "dashboard" | "documents" | "review" | "analytics" | "improvement" | "research" | "degradations" | "preprocessing" | "settings";
+
 
 interface AppShellProps {
   currentTab: NavTab;
@@ -100,6 +102,38 @@ export const AppShell: React.FC<AppShellProps> = ({
                       {item.badge}
                     </span>
                   )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Continuous Improvement Section */}
+          <div className="space-y-1">
+            <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Improvement
+            </span>
+            {[
+              { id: "improvement" as NavTab, label: "Improvement Loop", icon: RotateCcw, badge: "MVP-10" },
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onSelectTab(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-indigo-600/15 text-indigo-400 border border-indigo-500/20"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 ${isActive ? "text-indigo-400" : "text-slate-400"}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase">
+                    {item.badge}
+                  </span>
                 </button>
               );
             })}

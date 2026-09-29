@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
   ControlCenterResponse,
+  ImprovementOverview,
   OperationsBacklogSummary,
   TimePeriod,
 } from "../types";
-import { apiAnalytics, apiDocuments, apiOperations } from "../api/client";
+import { apiAnalytics, apiDocuments, apiImprovement, apiOperations } from "../api/client";
 import { DocumentTable } from "../components/DocumentTable";
 import {
   TrendingUp,
@@ -29,6 +30,7 @@ interface DashboardPageProps {
   onNavigateToReview?: () => void;
   onNavigateToAnalytics?: () => void;
   onNavigateToResearch?: () => void;
+  onNavigateToImprovement?: () => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -38,12 +40,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigateToReview,
   onNavigateToAnalytics,
   onNavigateToResearch,
+  onNavigateToImprovement,
 }) => {
   const [period, setPeriod] = useState<TimePeriod>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [data, setData] = useState<ControlCenterResponse | null>(null);
   const [backlog, setBacklog] = useState<OperationsBacklogSummary | null>(null);
+  const [improvement, setImprovement] = useState<ImprovementOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,12 +70,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           params.to = toDate.toISOString().replace(/\.\d{3}Z$/, "Z");
         }
       }
-      const [response, backlogData] = await Promise.all([
+      const [response, backlogData, improvementData] = await Promise.all([
         apiAnalytics.getControlCenter(params),
         apiOperations.getBacklog().catch(() => null),
+        apiImprovement.getOverview(params).catch(() => null),
       ]);
       setData(response);
       setBacklog(backlogData);
+      setImprovement(improvementData);
     } catch (err: any) {
       console.error("Failed to load Control Center data", err);
       setError(err?.message || "Failed to load Control Center metrics. Please verify backend connection.");
@@ -420,6 +426,63 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* MVP-10 Document AI Improvement Loop Status Banner */}
+      {improvement && (
+        <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+              <FlaskConical className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-200">
+                  Document AI Improvement Loop
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  MVP-10
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Connecting operator corrections to deterministic research signals and hypothesis questions.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400 block">Active Signals</span>
+              <span className="text-lg font-bold font-mono text-indigo-300">
+                {improvement.active_signals_count}
+              </span>
+            </div>
+            <div className="h-8 w-px bg-slate-800" />
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400 block">Open Questions</span>
+              <span className="text-lg font-bold font-mono text-amber-300">
+                {improvement.open_questions_count}
+              </span>
+            </div>
+            <div className="h-8 w-px bg-slate-800" />
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400 block">Field Corrections</span>
+              <span className="text-lg font-bold font-mono text-emerald-300">
+                {improvement.summary.total_field_corrections}
+              </span>
+            </div>
+
+            {onNavigateToImprovement && (
+              <button
+                onClick={onNavigateToImprovement}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 ml-2"
+              >
+                <span>Improvement Center</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 4. Middle Section: Automation Loss Funnel & Review Reasons */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

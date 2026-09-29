@@ -82,3 +82,23 @@ class AuditAction(str, Enum):
     DOCUMENT_REJECTED = "document_rejected"
     JOB_RETRIED = "job_retried"
     PROCESSING_FAILED = "processing_failed"
+
+
+class ResearchQuestionStatus(str, Enum):
+    """Lifecycle state of an intentional research investigation."""
+
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    EXPERIMENT_AVAILABLE = "EXPERIMENT_AVAILABLE"
+    CLOSED = "CLOSED"
+
+
+class ResearchSignalType(str, Enum):
+    """Canonical classification for derived observational signals."""
+
+    CORRECTION_CONCENTRATION = "CORRECTION_CONCENTRATION"
+    CONFIDENCE_CORRECTION_PATTERN = "CONFIDENCE_CORRECTION_PATTERN"
+    REVIEW_REASON_CORRECTION_PATTERN = "REVIEW_REASON_CORRECTION_PATTERN"
+    QUALITY_CORRECTION_PATTERN = "QUALITY_CORRECTION_PATTERN"
+    FIELD_VALIDATION_PATTERN = "FIELD_VALIDATION_PATTERN"
+

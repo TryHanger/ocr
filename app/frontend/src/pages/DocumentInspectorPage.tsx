@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { DocumentDetail, DocumentOperationsResponse, OperationalAction } from "../types";
-import { apiDocuments, apiOperations, apiReview } from "../api/client";
+import { DocumentDetail, DocumentOperationsResponse, OperationalAction, ResearchSignal } from "../types";
+import { apiDocuments, apiImprovement, apiOperations, apiReview } from "../api/client";
 import { DocumentViewer } from "../components/DocumentViewer";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfidenceBadge } from "../components/ConfidenceBadge";
@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   RotateCw,
+  RotateCcw,
   Edit2,
   Check,
   CheckCircle2,
@@ -26,12 +27,14 @@ interface DocumentInspectorPageProps {
   documentId: string;
   onBack: () => void;
   onNavigateToResearch?: (track: "B1" | "B2", degradationCode: string) => void;
+  onNavigateToImprovement?: () => void;
 }
 
 export const DocumentInspectorPage: React.FC<DocumentInspectorPageProps> = ({
   documentId,
   onBack,
   onNavigateToResearch,
+  onNavigateToImprovement,
 }) => {
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
   const [selectedField, setSelectedField] = useState<string | null>(null);
@@ -44,6 +47,18 @@ export const DocumentInspectorPage: React.FC<DocumentInspectorPageProps> = ({
   const [operations, setOperations] = useState<DocumentOperationsResponse | null>(null);
   const [isLoadingOps, setIsLoadingOps] = useState(false);
   const [opsError, setOpsError] = useState<string | null>(null);
+
+  // MVP-10 Improvement Loop Research Signals
+  const [researchSignals, setResearchSignals] = useState<ResearchSignal[]>([]);
+
+  const loadResearchSignals = async () => {
+    try {
+      const signals = await apiImprovement.getSignals({ period: "all" });
+      setResearchSignals(signals);
+    } catch (err) {
+      console.error("Failed to load research signals", err);
+    }
+  };
 
   const loadOperations = async () => {
     setIsLoadingOps(true);
@@ -73,6 +88,7 @@ export const DocumentInspectorPage: React.FC<DocumentInspectorPageProps> = ({
   useEffect(() => {
     loadDocument();
     loadOperations();
+    loadResearchSignals();
     // Poll if document is still in processing state
     if (doc?.status === "processing" || doc?.status === "uploaded") {
       const interval = setInterval(() => {
@@ -489,6 +505,54 @@ export const DocumentInspectorPage: React.FC<DocumentInspectorPageProps> = ({
         onRefresh={loadOperations}
       />
 
+      {/* Research Context Callout (MVP-10) */}
+      {doc && researchSignals.length > 0 && (() => {
+        const matchingSignals = researchSignals.filter(
+          (s) => (s.field && doc.fields && doc.fields[s.field]) || (s.document_type && s.document_type === doc.document_type)
+        );
+        if (matchingSignals.length === 0) return null;
+        return (
+          <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start gap-3">
+              <FlaskConical className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-indigo-300">Continuous Improvement Context:</span>{" "}
+                <span className="text-slate-300">
+                  {matchingSignals.length} active research signal{matchingSignals.length > 1 ? "s" : ""} observed for fields or document types in this document.
+                </span>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {matchingSignals.slice(0, 3).map((sig) => (
+                    <span
+                      key={sig.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-900/50 border border-indigo-700/50 text-[11px] text-indigo-200"
+                    >
+                      <span>{sig.title}</span>
+                      <span className="text-indigo-400 font-mono">
+                        ({sig.evidence?.sample_size || sig.evidence?.correction_count || sig.evidence?.corrections || "facts"})
+                      </span>
+                    </span>
+                  ))}
+                  {matchingSignals.length > 3 && (
+                    <span className="text-[11px] text-slate-400 self-center">
+                      +{matchingSignals.length - 3} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {onNavigateToImprovement && (
+              <button
+                onClick={onNavigateToImprovement}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 font-medium transition-colors shrink-0 text-xs"
+              >
+                <span>Improvement Center</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Main Split Layout: Viewer vs Tabs */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-[600px]">
         {/* Left Column: Document Image & BBox Viewer (7 Cols) */}
@@ -574,6 +638,15 @@ export const DocumentInspectorPage: React.FC<DocumentInspectorPageProps> = ({
                             {field.is_corrected && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                                 Edited
+                              </span>
+                            )}
+                            {researchSignals.some((s) => s.field === name) && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1"
+                                title="Active improvement research signal observed for this field"
+                              >
+                                <FlaskConical className="w-2.5 h-2.5" />
+                                Signal
                               </span>
                             )}
                           </div>

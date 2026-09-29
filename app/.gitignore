@@ -13,3 +13,7 @@ __pycache__/
 backend/storage/
 *.sqlite
 *.db
+
+# Allow backend models to be tracked (unignore root models/ rule)
+!backend/app/models/
+!backend/app/models/*.py

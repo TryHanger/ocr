@@ -24,6 +24,13 @@ import {
   DocumentOperationsResponse,
   OperationalAction,
   OperationsBacklogSummary,
+  CreateResearchQuestionRequest,
+  ImprovementOverview,
+  ResearchQuestion,
+  ResearchQuestionDetail,
+  ResearchQuestionListResponse,
+  ResearchSignal,
+  UpdateResearchQuestionRequest,
 } from "../types";
 
 const api = axios.create({
@@ -224,6 +231,48 @@ export const apiOperations = {
 
   getBacklog: async (): Promise<OperationsBacklogSummary> => {
     const res = await api.get<OperationsBacklogSummary>("/operations/backlog");
+    return res.data;
+  },
+};
+
+export const apiImprovement = {
+  getOverview: async (params?: { period?: string; date_from?: string; date_to?: string }): Promise<ImprovementOverview> => {
+    const res = await api.get<ImprovementOverview>("/improvement/overview", { params });
+    return res.data;
+  },
+
+  getSignals: async (params?: {
+    period?: string;
+    date_from?: string;
+    date_to?: string;
+    field?: string;
+  }): Promise<ResearchSignal[]> => {
+    const res = await api.get<ResearchSignal[]>("/improvement/signals", { params });
+    return res.data;
+  },
+
+  listQuestions: async (params?: {
+    status?: string;
+    field?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ResearchQuestionListResponse> => {
+    const res = await api.get<ResearchQuestionListResponse>("/improvement/questions", { params });
+    return res.data;
+  },
+
+  createQuestion: async (data: CreateResearchQuestionRequest): Promise<ResearchQuestion> => {
+    const res = await api.post<ResearchQuestion>("/improvement/questions", data);
+    return res.data;
+  },
+
+  getQuestionDetail: async (id: string): Promise<ResearchQuestionDetail> => {
+    const res = await api.get<ResearchQuestionDetail>(`/improvement/questions/${id}`);
+    return res.data;
+  },
+
+  updateQuestion: async (id: string, data: UpdateResearchQuestionRequest): Promise<ResearchQuestion> => {
+    const res = await api.patch<ResearchQuestion>(`/improvement/questions/${id}`, data);
     return res.data;
   },
 };

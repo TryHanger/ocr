@@ -5,6 +5,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { DocumentInspectorPage } from "./pages/DocumentInspectorPage";
 import { ManualReviewPage } from "./pages/ManualReviewPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { ImprovementCenterPage } from "./pages/ImprovementCenterPage";
 import { ResearchPage } from "./pages/ResearchPage";
 import { DegradationExplorerPage } from "./pages/DegradationExplorerPage";
 import { PreprocessingExplorerPage } from "./pages/PreprocessingExplorerPage";
@@ -34,6 +35,7 @@ export const App: React.FC = () => {
         "documents",
         "review",
         "analytics",
+        "improvement",
         "research",
         "degradations",
         "preprocessing",
@@ -112,6 +114,10 @@ export const App: React.FC = () => {
           documentId={inspectedDocId}
           onBack={() => setInspectedDocId(null)}
           onNavigateToResearch={handleNavigateToResearch}
+          onNavigateToImprovement={() => {
+            setInspectedDocId(null);
+            setCurrentTab("improvement");
+          }}
         />
       ) : (
         <>
@@ -123,6 +129,7 @@ export const App: React.FC = () => {
               onNavigateToReview={() => setCurrentTab("review")}
               onNavigateToAnalytics={() => setCurrentTab("analytics")}
               onNavigateToResearch={() => setCurrentTab("research")}
+              onNavigateToImprovement={() => setCurrentTab("improvement")}
             />
           )}
 
@@ -133,6 +140,10 @@ export const App: React.FC = () => {
           {currentTab === "review" && <ManualReviewPage onInspect={handleInspect} />}
 
           {currentTab === "analytics" && <AnalyticsPage />}
+
+          {currentTab === "improvement" && (
+            <ImprovementCenterPage onNavigateToResearch={handleNavigateToResearch} />
+          )}
 
           {currentTab === "research" && <ResearchPage />}
 

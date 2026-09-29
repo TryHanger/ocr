@@ -679,4 +679,121 @@ export interface OperationsBacklogSummary {
   by_reason: Record<string, number>;
 }
 
+// MVP-10: Document AI Improvement Loop
+export type ResearchQuestionStatus = "OPEN" | "IN_PROGRESS" | "EXPERIMENT_AVAILABLE" | "CLOSED";
+
+export type ResearchSignalType =
+  | "CORRECTION_CONCENTRATION"
+  | "CONFIDENCE_CORRECTION_PATTERN"
+  | "REVIEW_REASON_CORRECTION_PATTERN"
+  | "QUALITY_CORRECTION_PATTERN"
+  | "FIELD_VALIDATION_PATTERN";
+
+export interface FieldCorrectionMetric {
+  field: string;
+  correction_count: number;
+  evaluated_count: number;
+  correction_rate: number;
+  share_of_all_corrections: number;
+  affected_documents: number;
+}
+
+export interface ConfidenceCorrectionBucket {
+  bucket: string;
+  evaluated_fields: number;
+  corrected_fields: number;
+  correction_rate: number;
+  share_of_corrections: number;
+}
+
+export interface ResearchSignal {
+  id: string;
+  signal_type: ResearchSignalType;
+  title: string;
+  description: string;
+  population: Record<string, any>;
+  field?: string | null;
+  document_type?: string | null;
+  evidence: Record<string, any>;
+  period: string;
+  related_evidence_refs: Array<Record<string, any>>;
+}
+
+export interface ResearchQuestion {
+  id: string;
+  title: string;
+  description: string;
+  source_signal_id?: string | null;
+  field?: string | null;
+  document_type?: string | null;
+  status: ResearchQuestionStatus;
+  related_evidence_refs: Array<Record<string, any>>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchQuestionListResponse {
+  items: ResearchQuestion[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ResearchQuestionDetail extends ResearchQuestion {
+  enriched_evidence?: Record<string, any> | null;
+}
+
+export interface ImprovementOverviewSummary {
+  documents_processed: number;
+  documents_reviewed: number;
+  documents_corrected: number;
+  total_field_corrections: number;
+  correction_rate: number;
+  no_change_review_rate: number;
+}
+
+export interface ImprovementOverview {
+  period: string;
+  date_from?: string | null;
+  date_to?: string | null;
+  summary: ImprovementOverviewSummary;
+  by_field: FieldCorrectionMetric[];
+  by_confidence: ConfidenceCorrectionBucket[];
+  by_reason: Array<{
+    reason: string;
+    reviewed_documents: number;
+    documents_with_corrections: number;
+    correction_events: number;
+    correction_rate: number;
+  }>;
+  by_document_type: Array<{
+    document_type: string;
+    reviewed_documents: number;
+    documents_with_corrections: number;
+    correction_events: number;
+    correction_rate: number;
+  }>;
+  active_signals_count: number;
+  open_questions_count: number;
+}
+
+export interface CreateResearchQuestionRequest {
+  title: string;
+  description: string;
+  source_signal_id?: string | null;
+  field?: string | null;
+  document_type?: string | null;
+  related_evidence_refs?: Array<Record<string, any>> | null;
+  created_by?: string;
+}
+
+export interface UpdateResearchQuestionRequest {
+  title?: string;
+  description?: string;
+  status?: ResearchQuestionStatus;
+  related_evidence_refs?: Array<Record<string, any>> | null;
+}
+
+
 
